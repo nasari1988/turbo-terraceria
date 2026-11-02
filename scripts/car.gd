@@ -1,4 +1,8 @@
 extends Node3D
+
+signal impact(strength: float)
+signal item_use_requested(car: Node3D)
+signal item_changed(item: String)
 ## Auto con física arcade estilo "bola": una esfera invisible sin fricción se
 ## desliza por el mundo y el modelo visible la sigue. Así el manejo es estable,
 ## perdona errores y funciona bien en rampas y saltos.
@@ -30,6 +34,17 @@ var input_gas := 0.0
 var input_brake := 0.0
 var input_steer := 0.0       # +1 izquierda, -1 derecha
 
+# Power-ups
+const BOOST_ACCEL := 8.0     # empuje extra mientras dura el turbo
+const BOOST_KICK := 7.0      # empujón inmediato al activarlo (m/s)
+var item := ""               # "turbo", "escudo", "aceite", "onda" o vacío
+var boost_time := 0.0
+var shield_time := 0.0
+var spin_time := 0.0
+var _spin_dir := 1.0
+var _prev_hv := Vector3.ZERO
+var _skip_impact := 0
+
 # Datos de carrera (los llena race.gd)
 var race_progress := 0.0
 var prev_angle := 0.0
@@ -52,11 +67,75 @@ var _model_up := Vector3.UP
 var _spawn_pos := Vector3.ZERO
 var _spawn_heading := 0.0
 var _steer_visual := 0.0
+var _dust: CPUParticles3D
+var _flames: Array[MeshInstance3D] = []
+var _shield_mesh: MeshInstance3D
+var _engine: AudioStreamPlayer3D
+var _skid: AudioStreamPlayer3D
+var _sfx: Node
 
 
 func _ready() -> void:
 	_build_ball()
 	_build_model()
+	_build_effects()
+	_sfx = get_tree().get_first_node_in_group("sfx")
+	if _sfx:
+		_build_audio()
+
+
+# --------------------------------------------------------------- power-ups
+
+func give_item(kind: String) -> void:
+	item = kind
+	item_changed.emit(item)
+
+
+func request_use_item() -> void:
+	if item != "" and controls_enabled:
+		item_use_requested.emit(self)
+
+
+func take_item() -> String:
+	var k := item
+	item = ""
+	item_changed.emit(item)
+	return k
+
+
+func start_boost(seconds := 1.6) -> void:
+	boost_time = seconds
+	_skip_impact = 2
+	_ball.linear_velocity += get_forward_flat() * BOOST_KICK
+	_play("turbo", 0.0)
+
+
+func start_shield(seconds := 5.0) -> void:
+	shield_time = seconds
+	_play("escudo", 0.0)
+
+
+## Recibe un ataque (aceite u onda). Devuelve false si el escudo lo bloqueó.
+func hit(kind: String, push := Vector3.ZERO) -> bool:
+	if shield_time > 0.0:
+		shield_time = 0.0
+		_play("escudo", 2.0, 0.8)
+		return false
+	_skip_impact = 3
+	spin_time = 1.1 if kind == "aceite" else 0.7
+	_spin_dir = 1.0 if randf() < 0.5 else -1.0
+	var v := _ball.linear_velocity
+	_ball.linear_velocity = Vector3(v.x * 0.5, v.y, v.z * 0.5) + push
+	_play("aceite" if kind == "aceite" else "golpe", 2.0)
+	return true
+
+
+func clear_effects() -> void:
+	boost_time = 0.0
+	shield_time = 0.0
+	spin_time = 0.0
+	if item != "":
+		take_item()
 
 
 # ------------------------------------------------------------------ API
@@ -68,6 +147,8 @@ func respawn_at(pos: Vector3, new_heading: float) -> void:
 
 
 func respawn() -> void:
+	_skip_impact = 3
+	spin_time = 0.0
 	heading = _spawn_heading
 	_ball.linear_velocity = Vector3.ZERO
 	_ball.global_position = _spawn_pos
@@ -104,9 +185,21 @@ func _physics_process(delta: float) -> void:
 		input_gas = Input.get_action_strength("acelerar")
 		input_brake = Input.get_action_strength("frenar")
 		input_steer = Input.get_action_strength("izquierda") - Input.get_action_strength("derecha")
+	if use_player_input and controls_enabled and Input.is_action_just_pressed("usar"):
+		request_use_item()
 	var gas := input_gas if controls_enabled else 0.0
 	var brake := input_brake if controls_enabled else 0.0
 	var steer := input_steer if controls_enabled else 0.0
+
+	boost_time = maxf(0.0, boost_time - delta)
+	shield_time = maxf(0.0, shield_time - delta)
+	if spin_time > 0.0:
+		# Trompo: sin control unos instantes.
+		spin_time -= delta
+		heading += 9.0 * _spin_dir * delta
+		gas = 0.0
+		brake = 0.0
+		steer = 0.0
 
 	grounded = _ray.is_colliding()
 	var normal := _ray.get_collision_normal() if grounded else Vector3.UP
@@ -114,6 +207,15 @@ func _physics_process(delta: float) -> void:
 	var vel := _ball.linear_velocity
 	var fwd_flat := get_forward_flat()
 	speed = vel.dot(fwd_flat)
+
+	# Choque: cambio brusco de velocidad horizontal entre un cuadro y otro.
+	var hv := Vector3(vel.x, 0.0, vel.z)
+	var dv := (hv - _prev_hv).length()
+	_prev_hv = hv
+	if _skip_impact > 0:
+		_skip_impact -= 1
+	elif dv > 5.0:
+		_on_impact(dv)
 
 	var flat_vel := Vector3(vel.x, 0.0, vel.z)
 	drifting = grounded and brake > 0.5 and absf(steer) > 0.3 and speed > 0.0 \
@@ -142,6 +244,8 @@ func _physics_process(delta: float) -> void:
 		var right := forward.cross(normal).normalized()
 
 		var drive := ACCEL * power * gas
+		if boost_time > 0.0:
+			drive += BOOST_ACCEL
 		if brake > 0.0:
 			if drifting:
 				pass  # el freno sirve para iniciar el derrape, no frena
@@ -156,16 +260,16 @@ func _physics_process(delta: float) -> void:
 		if drifting:
 			# En derrape la velocidad no se pierde: se va girando poco a poco
 			# hacia donde apunta el auto (la cola "barre" la curva).
-			var hv := vel.slide(normal)
-			var dir := hv.normalized().slerp(forward, DRIFT_GRIP)
-			_ball.linear_velocity = dir * hv.length() * 0.998 + vel.project(normal)
+			var slide_v := vel.slide(normal)
+			var dir := slide_v.normalized().slerp(forward, DRIFT_GRIP)
+			_ball.linear_velocity = dir * slide_v.length() * 0.998 + vel.project(normal)
 		else:
 			# Agarre lateral: quita parte del deslizamiento de lado.
 			var lateral := vel.dot(right)
 			_ball.apply_central_impulse(-right * lateral * GRIP * _ball.mass)
 
 		# Resistencia del aire y del terreno.
-		var drag := DRAG
+		var drag := DRAG * (0.85 if boost_time > 0.0 else 1.0)
 		if track and track.has_method("is_on_grass") and track.is_on_grass(_ball.global_position):
 			drag += GRASS_DRAG
 		_ball.apply_central_force(-vel.slide(normal) * drag * _ball.mass)
@@ -176,6 +280,7 @@ func _physics_process(delta: float) -> void:
 
 	_hull.basis = Basis(Vector3.UP, heading) * Basis(Vector3.RIGHT, PI / 2.0)
 	_update_model(delta, normal, steer)
+	_update_effects(delta)
 
 
 # --------------------------------------------------------- construcción
@@ -303,3 +408,158 @@ func _mat(color: Color) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
 	m.albedo_color = color
 	return m
+
+
+# ------------------------------------------------------------- efectos
+
+func _build_effects() -> void:
+	# Polvo de las llantas traseras.
+	_dust = CPUParticles3D.new()
+	_dust.amount = 22
+	_dust.lifetime = 0.9
+	_dust.local_coords = false
+	_dust.emitting = false
+	var quad := QuadMesh.new()
+	quad.size = Vector2(1.1, 1.1)
+	var dm := StandardMaterial3D.new()
+	dm.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	dm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	dm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	dm.vertex_color_use_as_albedo = true
+	# Textura circular difuminada para que el polvo no se vea cuadrado.
+	var puff := GradientTexture2D.new()
+	puff.fill = GradientTexture2D.FILL_RADIAL
+	puff.fill_from = Vector2(0.5, 0.5)
+	puff.fill_to = Vector2(1.0, 0.5)
+	puff.width = 64
+	puff.height = 64
+	var g := Gradient.new()
+	g.set_color(0, Color(1, 1, 1, 1))
+	g.set_color(1, Color(1, 1, 1, 0))
+	puff.gradient = g
+	dm.albedo_texture = puff
+	quad.material = dm
+	_dust.mesh = quad
+	_dust.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	_dust.emission_box_extents = Vector3(0.9, 0.1, 0.2)
+	_dust.direction = Vector3(0, 1, 1)
+	_dust.spread = 30.0
+	_dust.initial_velocity_min = 1.0
+	_dust.initial_velocity_max = 3.0
+	_dust.gravity = Vector3(0, 0.6, 0)
+	_dust.scale_amount_min = 0.7
+	_dust.scale_amount_max = 1.6
+	var grow := Curve.new()
+	grow.add_point(Vector2(0, 0.5))
+	grow.add_point(Vector2(1, 1.8))
+	_dust.scale_amount_curve = grow
+	var fade := Gradient.new()
+	fade.set_color(0, Color(0.78, 0.6, 0.42, 0.45))
+	fade.set_color(1, Color(0.78, 0.6, 0.42, 0.0))
+	_dust.color_ramp = fade
+	_dust.position = Vector3(0, 0.25, 1.7)
+	_model.add_child(_dust)
+
+	# Flamas del turbo.
+	for x in [-0.5, 0.5]:
+		var f := MeshInstance3D.new()
+		var cone := CylinderMesh.new()
+		cone.top_radius = 0.0
+		cone.bottom_radius = 0.18
+		cone.height = 0.9
+		f.mesh = cone
+		var fm := StandardMaterial3D.new()
+		fm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		fm.albedo_color = Color("ff9f1c")
+		f.material_override = fm
+		f.rotation.x = PI / 2.0
+		f.position = Vector3(x, 0.55, 2.6)
+		f.visible = false
+		_model.add_child(f)
+		_flames.append(f)
+
+	# Burbuja del escudo.
+	_shield_mesh = MeshInstance3D.new()
+	var sphere := SphereMesh.new()
+	sphere.radius = 2.5
+	sphere.height = 3.4
+	_shield_mesh.mesh = sphere
+	var sm := StandardMaterial3D.new()
+	sm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	sm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	sm.albedo_color = Color(0.4, 0.85, 1.0, 0.28)
+	sm.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_shield_mesh.material_override = sm
+	_shield_mesh.position = Vector3(0, 0.9, 0)
+	_shield_mesh.visible = false
+	_model.add_child(_shield_mesh)
+
+
+func _build_audio() -> void:
+	_engine = AudioStreamPlayer3D.new()
+	_engine.stream = _sfx.streams.motor
+	_engine.volume_db = -3.0 if use_player_input else -9.0
+	_engine.unit_size = 10.0
+	_engine.position = Vector3(0, 0.8, 0)
+	_model.add_child(_engine)
+	_engine.play()
+	_skid = AudioStreamPlayer3D.new()
+	_skid.stream = _sfx.streams.derrape
+	_skid.volume_db = -80.0
+	_skid.unit_size = 10.0
+	_model.add_child(_skid)
+	_skid.play()
+
+
+func _update_effects(delta: float) -> void:
+	var fast_on_ground := grounded and absf(speed) > 9.0
+	_dust.emitting = grounded and (drifting or spin_time > 0.0 or (fast_on_ground and input_gas > 0.0))
+
+	var boosting := boost_time > 0.0
+	for f in _flames:
+		f.visible = boosting
+		if boosting:
+			f.scale = Vector3.ONE * randf_range(0.8, 1.3)
+	_shield_mesh.visible = shield_time > 0.0 and (shield_time > 1.0 or fmod(shield_time, 0.2) > 0.1)
+	if spin_time > 0.0:
+		_body.rotation.z += sin(spin_time * 30.0) * 0.02
+
+	if _engine:
+		var target := 0.55 + absf(speed) / 18.0 + (0.15 if input_gas > 0.0 and controls_enabled else 0.0)
+		if boosting:
+			target += 0.25
+		_engine.pitch_scale = lerpf(_engine.pitch_scale, clampf(target, 0.5, 2.8), 1.0 - exp(-8.0 * delta))
+		var skid_on := drifting or spin_time > 0.0
+		_skid.volume_db = lerpf(_skid.volume_db, -6.0 if skid_on else -60.0, 1.0 - exp(-12.0 * delta))
+
+
+func _on_impact(strength: float) -> void:
+	impact.emit(strength)
+	_play("golpe", linear_to_db(clampf(strength / 18.0, 0.25, 1.0)) + 2.0, randf_range(0.85, 1.15))
+	var sparks := CPUParticles3D.new()
+	sparks.one_shot = true
+	sparks.explosiveness = 1.0
+	sparks.amount = int(clampf(strength * 1.5, 10, 32))
+	sparks.lifetime = 0.5
+	var box := BoxMesh.new()
+	box.size = Vector3(0.07, 0.07, 0.25)
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.albedo_color = Color("ffd166")
+	box.material = m
+	sparks.mesh = box
+	sparks.direction = Vector3(0, 1, 0)
+	sparks.spread = 80.0
+	sparks.initial_velocity_min = 4.0
+	sparks.initial_velocity_max = 9.0
+	sparks.gravity = Vector3(0, -14, 0)
+	sparks.particle_flag_align_y = true
+	get_parent().add_child(sparks)
+	sparks.global_position = get_car_position() + get_forward_flat() * 1.6 + Vector3.UP * 0.7
+	sparks.emitting = true
+	get_tree().create_timer(1.2).timeout.connect(sparks.queue_free)
+
+
+func _play(sound: String, volume_db := 0.0, pitch := 1.0) -> void:
+	if _sfx:
+		_sfx.play_at(sound, get_car_position(), volume_db, pitch)

@@ -2,6 +2,9 @@ extends CanvasLayer
 ## Menús: principal, pausa y resultados. Funciona aunque el juego esté en pausa.
 
 var race: Node
+var sfx: Node
+var _sound_on := true
+var _sound_button: Button
 
 var _dim: ColorRect
 var _main: VBoxContainer
@@ -79,6 +82,11 @@ func _build_main() -> void:
 	_change_difficulty(0)
 
 	_main.add_child(_button("PRÁCTICA LIBRE", func(): _start(race.Mode.PRACTICE)))
+	_sound_button = _small_button("", _toggle_sound)
+	_sound_button.custom_minimum_size = Vector2(420, 64)
+	_sound_button.add_theme_font_size_override("font_size", 28)
+	_main.add_child(_sound_button)
+	_apply_sound()
 
 
 func _build_pause() -> void:
@@ -157,17 +165,31 @@ func _change_difficulty(step: int) -> void:
 		_save_settings()
 
 
+func _toggle_sound() -> void:
+	_sound_on = not _sound_on
+	_apply_sound()
+	_save_settings()
+
+
+func _apply_sound() -> void:
+	if sfx:
+		sfx.set_muted(not _sound_on)
+	_sound_button.text = "Sonido: " + ("SÍ" if _sound_on else "NO")
+
+
 func _load_settings() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load(SETTINGS_PATH) == OK:
 		_laps = cfg.get_value("carrera", "vueltas", 3)
 		race.difficulty = cfg.get_value("carrera", "dificultad", 1)
+		_sound_on = cfg.get_value("general", "sonido", true)
 
 
 func _save_settings() -> void:
 	var cfg := ConfigFile.new()
 	cfg.set_value("carrera", "vueltas", _laps)
 	cfg.set_value("carrera", "dificultad", race.difficulty)
+	cfg.set_value("general", "sonido", _sound_on)
 	cfg.save(SETTINGS_PATH)
 
 

@@ -4,6 +4,8 @@ extends CanvasLayer
 
 var car: Node3D
 var race: Node
+var powerups: Node3D
+var sfx: Node
 
 var _buttons: Array[TouchScreenButton] = []
 var _left: TouchScreenButton
@@ -12,6 +14,9 @@ var _gas: TouchScreenButton
 var _brake: TouchScreenButton
 var _reset: TouchScreenButton
 var _pause: TouchScreenButton
+var _item: TouchScreenButton
+var _item_label: Label
+var _last_count := -1
 
 var _hud: Control
 var _speed_label: Label
@@ -38,6 +43,9 @@ func _ready() -> void:
 	_brake = _make_button("FRENO", "frenar", 140, Color(0.95, 0.3, 0.3, 0.45))
 	_reset = _make_button("R", "reiniciar", 80, Color(1, 1, 1, 0.3))
 	_pause = _make_button("II", "pausa", 80, Color(1, 1, 1, 0.3))
+	_item = _make_button("", "usar", 130, Color(1.0, 0.62, 0.11, 0.6))
+	_item_label = _item.get_child(0)
+	_item_label.add_theme_font_size_override("font_size", 24)
 
 	_speed_label = _make_label(60, HORIZONTAL_ALIGNMENT_CENTER)
 	_drift_label = _make_label(40, HORIZONTAL_ALIGNMENT_CENTER)
@@ -59,6 +67,11 @@ func _ready() -> void:
 	race.lap_completed.connect(_on_lap)
 	race.final_lap.connect(func(): show_notice("¡ÚLTIMA VUELTA!", Color("ffd166")))
 	race.state_changed.connect(_on_state)
+	race.player_finished.connect(func(): if sfx: sfx.play("meta", -2.0))
+	powerups.item_picked.connect(func(c, kind):
+		if c == car:
+			show_notice("¡" + powerups.item_name(kind) + "!", Color("ffb347"), 1.2)
+			if sfx: sfx.play("item", -6.0))
 	_on_state(race.state)
 
 
@@ -126,6 +139,22 @@ func _process(delta: float) -> void:
 	_notice_time -= delta
 	_notice.visible = _notice_time > 0.0
 
+	# Botón del objeto: solo aparece si traes uno.
+	var driving: bool = race.state == race.State.COUNTDOWN or race.state == race.State.RACING
+	_item.visible = driving and car.item != ""
+	_item_label.text = powerups.item_name(car.item)
+
+	# Pitidos de la cuenta regresiva.
+	if race.state == race.State.COUNTDOWN and sfx:
+		var c := ceili(race.countdown)
+		if c != _last_count and c <= 3 and c >= 1:
+			sfx.play("beep", -4.0)
+		_last_count = c
+	elif race.state == race.State.RACING and _last_count != 0:
+		_last_count = 0
+		if sfx and race.race_time < 0.5:
+			sfx.play("ya", -2.0)
+
 
 func _layout() -> void:
 	var size := get_viewport().get_visible_rect().size
@@ -134,6 +163,7 @@ func _layout() -> void:
 	_place(_right, Vector2(m + 75 + 180, size.y - m - 75))
 	_place(_gas, Vector2(size.x - m - 85, size.y - m - 85))
 	_place(_brake, Vector2(size.x - m - 85 - 185, size.y - m - 70))
+	_place(_item, Vector2(size.x - m - 85, size.y - m - 85 - 185))
 	_place(_pause, Vector2(size.x - m - 40, m + 40))
 	_place(_reset, Vector2(size.x - m - 40 - 100, m + 40))
 	_set_rect(_speed_label, Vector2(0, size.y - 105), Vector2(size.x, 80))
@@ -162,7 +192,7 @@ func _make_button(text: String, action: String, diameter: int, color: Color) -> 
 	b.texture_normal = _circle(diameter, color)
 	b.texture_pressed = _circle(diameter, Color(color.r, color.g, color.b, minf(color.a + 0.35, 1.0)))
 	b.action = action
-	b.passby_press = action != "pausa" and action != "reiniciar"
+	b.passby_press = action in ["izquierda", "derecha", "acelerar", "frenar"]
 	b.visibility_mode = TouchScreenButton.VISIBILITY_ALWAYS
 	b.set_meta("diameter", float(diameter))
 	var label := Label.new()

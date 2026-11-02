@@ -88,6 +88,40 @@ func _physics_process(delta: float) -> void:
 	car.input_gas = gas
 	car.input_brake = brake
 	car.input_steer = steer
+	_use_item_logic(delta, p, fwd, turn)
+
+
+## Decide cuándo usar el objeto que trae.
+var _item_wait := 0.0
+
+func _use_item_logic(delta: float, p: Vector3, fwd: Vector3, turn: float) -> void:
+	if car.item == "":
+		_item_wait = _rng.randf_range(0.5, 2.0)
+		return
+	_item_wait -= delta
+	if _item_wait > 0.0:
+		return
+	var behind := INF
+	var near := INF
+	for other in cars:
+		if other == car:
+			continue
+		var d: Vector3 = other.get_car_position() - p
+		near = minf(near, d.length())
+		if d.dot(fwd) < 0.0:
+			behind = minf(behind, d.length())
+	var use := false
+	match car.item:
+		"turbo":
+			use = absf(turn) < 0.15 and car.speed > 10.0
+		"escudo":
+			use = behind < 12.0 or _item_wait < -6.0
+		"aceite":
+			use = behind < 18.0 or _item_wait < -8.0
+		"onda":
+			use = near < 8.0 or _item_wait < -10.0
+	if use:
+		car.request_use_item()
 
 
 ## Desplazamiento lateral para rebasar al auto que va justo enfrente.

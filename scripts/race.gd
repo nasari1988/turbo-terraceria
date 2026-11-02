@@ -32,6 +32,7 @@ const DIFFICULTIES := [
 ]
 
 var track: Node3D
+var powerups: Node3D
 var player: Node3D
 var cars: Array = []          # el jugador siempre es cars[0]
 var state := State.MENU
@@ -100,6 +101,8 @@ func start(new_mode: int, new_laps: int) -> void:
 	last_lap = 0.0
 	best_lap = INF
 	countdown = COUNTDOWN_TIME + 0.8
+	if powerups:
+		powerups.reset(cars)
 	_set_state(State.COUNTDOWN)
 
 
@@ -111,6 +114,8 @@ func to_menu() -> void:
 	player.respawn_at(g.position, g.heading)
 	player.controls_enabled = false
 	player.use_player_input = true
+	if powerups:
+		powerups.reset(cars)
 	_set_state(State.MENU)
 
 

@@ -9,6 +9,7 @@ const BASE_FOV := 70.0
 const FAST_FOV := 82.0
 
 var target: Node3D
+var shake := 0.0            # intensidad de la sacudida (se desvanece sola)
 var orbit := false          # en el menú la cámara gira alrededor del auto
 var _orbit_angle := 0.6
 
@@ -38,8 +39,15 @@ func _physics_process(delta: float) -> void:
 		return
 	global_position = global_position.lerp(_desired_position(), t)
 	_look()
+	shake = maxf(0.0, shake - delta * 2.5)
+	h_offset = randf_range(-1.0, 1.0) * shake * 0.6
+	v_offset = randf_range(-1.0, 1.0) * shake * 0.4
 	var kmh: float = target.get_speed_kmh()
 	fov = lerpf(fov, lerpf(BASE_FOV, FAST_FOV, clampf(kmh / 110.0, 0.0, 1.0)), t)
+
+
+func add_shake(amount: float) -> void:
+	shake = clampf(shake + amount, 0.0, 1.0)
 
 
 func _desired_position() -> Vector3:

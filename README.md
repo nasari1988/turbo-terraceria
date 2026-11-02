@@ -26,7 +26,18 @@ Juego de carreras arcade para Android hecho con **Godot 4.7.2**.
 
 Si ves un auto rojo girando sobre un piso café y al tocar la pantalla cambia de color, la Fase 0 está completa.
 
-## Fase 2: carrera completa (actual)
+## Fase 3: el toque "Rumble" (actual)
+
+- **Cajas de power-ups** (cubos amarillos con ?): antes de la rampa, al salir de la curva derecha, en la recta de arriba y en el atajo. El botón naranja muestra el objeto; tócalo para usarlo (E / Shift en la computadora).
+  - **TURBO:** empujón de velocidad.
+  - **ESCUDO:** burbuja que bloquea el siguiente ataque.
+  - **ACEITE:** mancha detrás de ti; quien la pisa da un trompo.
+  - **ONDA:** empuja y hace girar a los autos cercanos.
+  - Los de atrás reciben más turbos y ondas; los de adelante, más defensas. Los rivales también los usan.
+- **Choques:** chispas, golpe y sacudida de cámara. **Polvo** en las llantas al acelerar y derrapar.
+- **Sonido:** motor según la velocidad, derrape, golpes, power-ups, cuenta regresiva, meta y música original. Todo se genera por código (`scripts/sfx.gd`), sin archivos de audio. Se puede apagar desde el menú.
+
+## Fase 2: carrera completa
 
 - **Menú principal:** CARRERA (elige 1, 3, 5 o 10 vueltas) o PRÁCTICA LIBRE.
 - **Carrera:** 5 rivales con IA (algunos toman el atajo), cuenta regresiva, vueltas, posición en vivo, cronómetro, última y mejor vuelta, aviso de última vuelta y de sentido contrario.
@@ -62,6 +73,8 @@ scripts/ui.gd                     Botones táctiles y HUD de carrera
 scripts/race.gd                   Reglas de la carrera: parrilla, vueltas, posiciones
 scripts/ai_driver.gd              Pilotos con IA
 scripts/menu.gd                   Menú principal, pausa y resultados
+scripts/powerups.gd               Cajas de objetos y sus efectos
+scripts/sfx.gd                    Sonidos y música generados por código
 .github/workflows/android.yml     Compilación automática del APK
 ```
 

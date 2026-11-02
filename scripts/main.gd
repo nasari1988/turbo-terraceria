@@ -7,6 +7,8 @@ const FollowCamera := preload("res://scripts/follow_camera.gd")
 const GameUI := preload("res://scripts/ui.gd")
 const Race := preload("res://scripts/race.gd")
 const Menu := preload("res://scripts/menu.gd")
+const Sfx := preload("res://scripts/sfx.gd")
+const Powerups := preload("res://scripts/powerups.gd")
 
 ## Acciones de control y sus teclas (para probar en la computadora).
 const ACTIONS := {
@@ -16,12 +18,17 @@ const ACTIONS := {
 	"derecha": [KEY_D, KEY_RIGHT],
 	"reiniciar": [KEY_R],
 	"pausa": [KEY_ESCAPE, KEY_P],
+	"usar": [KEY_E, KEY_SHIFT, KEY_ENTER],
 }
 
 
 func _ready() -> void:
 	_setup_input()
 	_setup_environment()
+
+	var sfx := Sfx.new()
+	sfx.name = "Sfx"
+	add_child(sfx)
 
 	var track := Track.new()
 	add_child(track)
@@ -37,19 +44,29 @@ func _ready() -> void:
 	add_child(race)
 	player.respawn_callback = race.respawn_on_track
 
+	var powerups := Powerups.new()
+	powerups.track = track
+	powerups.race = race
+	add_child(powerups)
+	race.powerups = powerups
+
 	var camera := FollowCamera.new()
 	camera.target = player
 	add_child(camera)
 	camera.current = true
 	race.state_changed.connect(func(s): camera.orbit = s == Race.State.MENU)
+	player.impact.connect(func(strength): camera.add_shake(clampf(strength / 25.0, 0.15, 0.8)))
 
 	var ui := GameUI.new()
 	ui.car = player
 	ui.race = race
+	ui.powerups = powerups
+	ui.sfx = sfx
 	add_child(ui)
 
 	var menu := Menu.new()
 	menu.race = race
+	menu.sfx = sfx
 	add_child(menu)
 
 	race.to_menu()
