@@ -24,6 +24,16 @@ Juego de carreras arcade para Android hecho con **Godot 4.7.2**.
 
 Si ves un auto rojo girando sobre un piso café y al tocar la pantalla cambia de color, la Fase 0 está completa.
 
+## Fase 1: auto manejable (actual)
+
+- **Controles táctiles:** `<` `>` para girar (izquierda de la pantalla), **GAS** y **FRENO** a la derecha, **R** para volver a la salida.
+- **Derrape:** a buena velocidad, mantén **FRENO** mientras giras. El auto abre la cola sin perder velocidad.
+- **Reversa:** mantén FRENO estando detenido.
+- **Pista de prueba:** óvalo de terracería con una rampa en la recta y un atajo por el centro con su propio salto. El pasto frena.
+- **En la computadora:** W/A/S/D o flechas, Espacio = freno, R = reiniciar.
+
+Los valores de manejo (aceleración, agarre, derrape, giro) están al inicio de `scripts/car.gd`, para afinarlos fácilmente.
+
 ## Para editar en tu computadora (opcional)
 
 Instala Godot **4.7.2** (versión estándar, no .NET) desde godotengine.org, abre Godot, elige **Importar** y selecciona `project.godot`.
@@ -34,7 +44,11 @@ Instala Godot **4.7.2** (versión estándar, no .NET) desde godotengine.org, abr
 project.godot                     Configuración del proyecto (renderizador móvil)
 export_presets.cfg                Preset de exportación "Android" (solo arm64)
 scenes/main.tscn                  Escena inicial
-scripts/main.gd                   Lógica de la escena de prueba
+scripts/main.gd                   Arma el juego: pista, auto, cámara, controles
+scripts/car.gd                    Física y modelo del auto
+scripts/track.gd                  Pista de prueba
+scripts/follow_camera.gd          Cámara que sigue al auto
+scripts/ui.gd                     Botones táctiles y velocímetro
 .github/workflows/android.yml     Compilación automática del APK
 ```
 

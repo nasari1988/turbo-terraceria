@@ -1,77 +1,75 @@
 extends Node3D
-## Escena de la Fase 0: solo confirma que el APK compila y corre en el teléfono.
-## Se arma por código para que no dependa de modelos ni texturas.
+## Escena principal de la Fase 1: arma la pista, el auto, la cámara y los controles.
 
-var _auto: MeshInstance3D
+const Track := preload("res://scripts/track.gd")
+const Car := preload("res://scripts/car.gd")
+const FollowCamera := preload("res://scripts/follow_camera.gd")
+const GameUI := preload("res://scripts/ui.gd")
+
+## Acciones de control y sus teclas (para probar en la computadora).
+const ACTIONS := {
+	"acelerar": [KEY_W, KEY_UP],
+	"frenar": [KEY_S, KEY_DOWN, KEY_SPACE],
+	"izquierda": [KEY_A, KEY_LEFT],
+	"derecha": [KEY_D, KEY_RIGHT],
+	"reiniciar": [KEY_R],
+}
 
 
 func _ready() -> void:
-	# Cielo y luz
-	var entorno := WorldEnvironment.new()
+	_setup_input()
+	_setup_environment()
+
+	var track := Track.new()
+	add_child(track)
+
+	var car := Car.new()
+	car.track = track
+	add_child(car)
+	car.respawn_at(track.start_position, track.start_heading)
+
+	var camera := FollowCamera.new()
+	camera.target = car
+	add_child(camera)
+	camera.current = true
+	camera.snap()
+
+	var ui := GameUI.new()
+	ui.car = car
+	add_child(ui)
+
+
+func _setup_input() -> void:
+	for action in ACTIONS:
+		if not InputMap.has_action(action):
+			InputMap.add_action(action)
+		for key in ACTIONS[action]:
+			var ev := InputEventKey.new()
+			ev.physical_keycode = key
+			InputMap.action_add_event(action, ev)
+
+
+func _setup_environment() -> void:
+	var sky_mat := ProceduralSkyMaterial.new()
+	sky_mat.sky_top_color = Color("4a90d9")
+	sky_mat.sky_horizon_color = Color("bfe0ff")
+	sky_mat.ground_horizon_color = Color("bfe0ff")
+	var sky := Sky.new()
+	sky.sky_material = sky_mat
 	var env := Environment.new()
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color("87c5ff")
+	env.background_mode = Environment.BG_SKY
+	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.6, 0.6, 0.6)
-	entorno.environment = env
-	add_child(entorno)
+	env.ambient_light_color = Color("9fb4d0")
+	env.ambient_light_energy = 0.45
+	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	var world := WorldEnvironment.new()
+	world.environment = env
+	add_child(world)
 
-	var sol := DirectionalLight3D.new()
-	sol.rotation_degrees = Vector3(-50, 30, 0)
-	sol.shadow_enabled = true
-	add_child(sol)
-
-	# Piso de terracería
-	var piso := MeshInstance3D.new()
-	var plano := PlaneMesh.new()
-	plano.size = Vector2(40, 40)
-	piso.mesh = plano
-	piso.material_override = _material(Color("b5651d"))
-	add_child(piso)
-
-	# "Auto" provisional: una caja roja con cabina
-	_auto = MeshInstance3D.new()
-	var carroceria := BoxMesh.new()
-	carroceria.size = Vector3(2.0, 0.6, 4.0)
-	_auto.mesh = carroceria
-	_auto.material_override = _material(Color("e63946"))
-	_auto.position.y = 0.5
-	add_child(_auto)
-
-	var cabina := MeshInstance3D.new()
-	var caja_cabina := BoxMesh.new()
-	caja_cabina.size = Vector3(1.6, 0.5, 1.8)
-	cabina.mesh = caja_cabina
-	cabina.material_override = _material(Color("f1faee"))
-	cabina.position = Vector3(0, 0.55, -0.2)
-	_auto.add_child(cabina)
-
-	# Cámara
-	var camara := Camera3D.new()
-	camara.position = Vector3(0, 4, 8)
-	add_child(camara)
-	camara.look_at(Vector3(0, 0.5, 0))
-
-	# Texto en pantalla
-	var etiqueta := Label.new()
-	etiqueta.text = "Turbo Terracería - Fase 0 OK\nToca la pantalla para cambiar de color"
-	etiqueta.add_theme_font_size_override("font_size", 36)
-	etiqueta.position = Vector2(24, 24)
-	var capa := CanvasLayer.new()
-	capa.add_child(etiqueta)
-	add_child(capa)
-
-
-func _process(delta: float) -> void:
-	_auto.rotate_y(delta * 0.8)
-
-
-func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventScreenTouch and event.pressed:
-		_auto.material_override = _material(Color.from_hsv(randf(), 0.8, 0.9))
-
-
-func _material(color: Color) -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.albedo_color = color
-	return m
+	var sun := DirectionalLight3D.new()
+	sun.rotation_degrees = Vector3(-55, 35, 0)
+	sun.light_energy = 0.9
+	sun.shadow_enabled = true
+	sun.directional_shadow_max_distance = 90.0
+	add_child(sun)
