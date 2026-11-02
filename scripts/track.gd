@@ -20,7 +20,9 @@ var _materials := {}
 
 
 func _ready() -> void:
-	start_position = Vector3(-30.0, 1.2, mid_z(-30.0))
+	var slot := grid_slot(0)
+	start_position = slot.position
+	start_heading = slot.heading
 	_build_ground()
 	_build_walls()
 	_build_ramps()
@@ -33,6 +35,49 @@ func mid_z(x: float) -> float:
 	var outer := OUTER.y * sqrt(maxf(0.0, 1.0 - pow(x / OUTER.x, 2)))
 	var inner := INNER.y * sqrt(maxf(0.0, 1.0 - pow(x / INNER.x, 2)))
 	return -(outer + inner) / 2.0
+
+
+const MID := (OUTER + INNER) / 2.0  # radios de la línea central del camino
+const START_X := -22.0               # x de la línea de meta (recta de abajo)
+
+
+## Ángulo de avance sobre la pista (0 = curva derecha, crece en el sentido de
+## la carrera). En el atajo se mapea en línea recta de 0 a PI.
+func progress_angle(p: Vector3) -> float:
+	if is_on_shortcut(p):
+		return PI * clampf((INNER.x - p.x) / (INNER.x * 2.0), 0.0, 1.0)
+	return atan2(p.z / MID.y, p.x / MID.x)
+
+
+func start_angle() -> float:
+	return -acos(START_X / MID.x)
+
+
+## Punto de la línea central, desplazado `lateral` metros hacia afuera.
+func centerline_point(angle: float, lateral := 0.0) -> Vector3:
+	var base := Vector3(cos(angle) * MID.x, 0.0, sin(angle) * MID.y)
+	var outward := Vector3(cos(angle) / MID.x, 0.0, sin(angle) / MID.y).normalized()
+	return base + outward * lateral
+
+
+## Rumbo (heading) del auto que va siguiendo la pista en ese ángulo.
+func centerline_heading(angle: float) -> float:
+	var t := Vector3(-sin(angle) * MID.x, 0.0, cos(angle) * MID.y)
+	return atan2(-t.x, -t.z)
+
+
+## Posición de salida número `slot` (0 = primero), en dos filas escalonadas.
+func grid_slot(slot: int) -> Dictionary:
+	var x := START_X - 4.0 - slot * 5.0
+	var angle := -acos(clampf(x / MID.x, -1.0, 1.0))
+	var lateral := -3.0 if slot % 2 == 0 else 3.0
+	var pos := centerline_point(angle, lateral) + Vector3(0, 1.2, 0)
+	return {"position": pos, "heading": centerline_heading(angle)}
+
+
+func is_on_shortcut(p: Vector3) -> bool:
+	var inside_inner := pow(p.x / INNER.x, 2) + pow(p.z / INNER.y, 2) < 1.0
+	return inside_inner and absf(p.z) <= SHORTCUT_HALF + 1.0
 
 
 func is_on_grass(p: Vector3) -> bool:
@@ -112,7 +157,7 @@ func _ramp(center: Vector3, direction: float, size: Vector2, angle: float) -> vo
 
 
 func _build_start_line() -> void:
-	var x := -22.0
+	var x := START_X
 	var outer := -OUTER.y * sqrt(1.0 - pow(x / OUTER.x, 2))
 	var inner := -INNER.y * sqrt(1.0 - pow(x / INNER.x, 2))
 	var width := absf(outer - inner)

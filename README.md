@@ -24,7 +24,15 @@ Juego de carreras arcade para Android hecho con **Godot 4.7.2**.
 
 Si ves un auto rojo girando sobre un piso café y al tocar la pantalla cambia de color, la Fase 0 está completa.
 
-## Fase 1: auto manejable (actual)
+## Fase 2: carrera completa (actual)
+
+- **Menú principal:** CARRERA (elige 1, 3, 5 o 10 vueltas) o PRÁCTICA LIBRE.
+- **Carrera:** 5 rivales con IA (algunos toman el atajo), cuenta regresiva, vueltas, posición en vivo, cronómetro, última y mejor vuelta, aviso de última vuelta y de sentido contrario.
+- **Resultados:** tabla final con tiempos, botones REVANCHA y MENÚ.
+- **Pausa:** botón II (o Esc / P en la computadora) con CONTINUAR, REINICIAR y MENÚ PRINCIPAL.
+- **R** te regresa al centro de la pista, donde ibas.
+
+## Fase 1: auto manejable
 
 - **Controles táctiles:** `<` `>` para girar (izquierda de la pantalla), **GAS** y **FRENO** a la derecha, **R** para volver a la salida.
 - **Derrape:** a buena velocidad, mantén **FRENO** mientras giras. El auto abre la cola sin perder velocidad.
@@ -48,7 +56,10 @@ scripts/main.gd                   Arma el juego: pista, auto, cámara, controles
 scripts/car.gd                    Física y modelo del auto
 scripts/track.gd                  Pista de prueba
 scripts/follow_camera.gd          Cámara que sigue al auto
-scripts/ui.gd                     Botones táctiles y velocímetro
+scripts/ui.gd                     Botones táctiles y HUD de carrera
+scripts/race.gd                   Reglas de la carrera: parrilla, vueltas, posiciones
+scripts/ai_driver.gd              Pilotos con IA
+scripts/menu.gd                   Menú principal, pausa y resultados
 .github/workflows/android.yml     Compilación automática del APK
 ```
 

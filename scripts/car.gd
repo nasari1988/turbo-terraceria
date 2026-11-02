@@ -18,6 +18,24 @@ const DRIFT_MIN_SPEED := 12.0
 const BALL_RADIUS := 1.0
 
 var track: Node3D            # la pista, para saber si vamos sobre pasto
+var display_name := "Tú"
+var number := 7
+var body_color := Color("e63946")
+var power := 1.0             # multiplicador de aceleración (la IA usa menos de 1)
+var use_player_input := true # false = lo maneja la IA (escribe en input_*)
+var controls_enabled := true # false = congelado (cuenta regresiva)
+var respawn_callback: Callable  # la carrera decide dónde reaparecer
+
+var input_gas := 0.0
+var input_brake := 0.0
+var input_steer := 0.0       # +1 izquierda, -1 derecha
+
+# Datos de carrera (los llena race.gd)
+var race_progress := 0.0
+var prev_angle := 0.0
+var laps_done := 0
+var finished := false
+var finish_time := 0.0
 var heading := 0.0           # hacia dónde apunta el auto (radianes)
 var speed := 0.0             # velocidad hacia adelante (m/s, negativa en reversa)
 var drifting := false
@@ -25,6 +43,7 @@ var grounded := false
 
 var _ball: RigidBody3D
 var _ray: RayCast3D
+var _hull: CollisionShape3D
 var _model: Node3D
 var _body: Node3D
 var _front_pivots: Array[Node3D] = []
@@ -73,13 +92,21 @@ func get_speed_kmh() -> float:
 # ------------------------------------------------------------- física
 
 func _physics_process(delta: float) -> void:
-	if Input.is_action_just_pressed("reiniciar") or _ball.global_position.y < -20.0:
-		respawn()
+	var wants_reset := use_player_input and controls_enabled and Input.is_action_just_pressed("reiniciar")
+	if wants_reset or _ball.global_position.y < -20.0:
+		if respawn_callback.is_valid():
+			respawn_callback.call(self)
+		else:
+			respawn()
 		return
 
-	var gas := Input.get_action_strength("acelerar")
-	var brake := Input.get_action_strength("frenar")
-	var steer := Input.get_action_strength("izquierda") - Input.get_action_strength("derecha")
+	if use_player_input:
+		input_gas = Input.get_action_strength("acelerar")
+		input_brake = Input.get_action_strength("frenar")
+		input_steer = Input.get_action_strength("izquierda") - Input.get_action_strength("derecha")
+	var gas := input_gas if controls_enabled else 0.0
+	var brake := input_brake if controls_enabled else 0.0
+	var steer := input_steer if controls_enabled else 0.0
 
 	grounded = _ray.is_colliding()
 	var normal := _ray.get_collision_normal() if grounded else Vector3.UP
@@ -114,7 +141,7 @@ func _physics_process(delta: float) -> void:
 		var forward := fwd_flat.slide(normal).normalized()
 		var right := forward.cross(normal).normalized()
 
-		var drive := ACCEL * gas
+		var drive := ACCEL * power * gas
 		if brake > 0.0:
 			if drifting:
 				pass  # el freno sirve para iniciar el derrape, no frena
@@ -147,6 +174,7 @@ func _physics_process(delta: float) -> void:
 		if gas == 0.0 and brake == 0.0 and vel.slide(normal).length() < 0.6:
 			_ball.linear_velocity = vel.project(normal)
 
+	_hull.basis = Basis(Vector3.UP, heading) * Basis(Vector3.RIGHT, PI / 2.0)
 	_update_model(delta, normal, steer)
 
 
@@ -169,6 +197,16 @@ func _build_ball() -> void:
 	col.shape = sphere
 	_ball.add_child(col)
 
+	# Casco alargado para chocar con muros y otros autos (no toca el suelo).
+	_hull = CollisionShape3D.new()
+	var capsule := CapsuleShape3D.new()
+	capsule.radius = 0.8
+	capsule.height = 4.2
+	_hull.shape = capsule
+	_hull.position = Vector3(0, 0.3, 0)
+	_hull.basis = Basis(Vector3.RIGHT, PI / 2.0)
+	_ball.add_child(_hull)
+
 	_ray = RayCast3D.new()
 	_ray.target_position = Vector3(0, -BALL_RADIUS - 0.6, 0)
 	_ball.add_child(_ray)
@@ -181,14 +219,17 @@ func _build_model() -> void:
 
 	_body = Node3D.new()
 	_model.add_child(_body)
-	_add_box(_body, Vector3(2.0, 0.55, 4.3), Vector3(0, 0.72, 0), Color("e63946"))       # carrocería
+	_add_box(_body, Vector3(2.0, 0.55, 4.3), Vector3(0, 0.72, 0), body_color)            # carrocería
 	_add_box(_body, Vector3(1.7, 0.5, 2.0), Vector3(0, 1.22, 0.3), Color("1d3557"))      # ventanas
 	_add_box(_body, Vector3(1.75, 0.08, 1.9), Vector3(0, 1.5, 0.3), Color("f1faee"))     # techo
 	_add_box(_body, Vector3(2.0, 0.08, 0.5), Vector3(0, 1.25, 2.0), Color("f1faee"))     # alerón
 	_add_box(_body, Vector3(0.12, 0.4, 0.12), Vector3(-0.8, 1.0, 2.0), Color("222222"))
 	_add_box(_body, Vector3(0.12, 0.4, 0.12), Vector3(0.8, 1.0, 2.0), Color("222222"))
 	_add_box(_body, Vector3(1.8, 0.2, 0.15), Vector3(0, 0.6, -2.18), Color("ffd166"))    # defensa
-	_add_box(_body, Vector3(0.9, 0.02, 0.9), Vector3(0, 1.0, -1.1), Color("ffd166"))     # número en cofre
+	# Número en el techo y en las puertas.
+	_add_number(Vector3(0, 1.56, 0.3), Vector3(-PI / 2.0, 0, 0), 0.007)
+	_add_number(Vector3(-1.02, 0.75, 0.1), Vector3(0, -PI / 2.0, 0), 0.005)
+	_add_number(Vector3(1.02, 0.75, 0.1), Vector3(0, PI / 2.0, 0), 0.005)
 
 	for x in [-1.0, 1.0]:
 		for z in [-1.35, 1.35]:
@@ -233,6 +274,19 @@ func _update_model(delta: float, normal := Vector3.UP, steer := 0.0) -> void:
 		s.rotate_x(-speed * delta / 0.42)
 	var lean := -_steer_visual * clampf(absf(speed) / 25.0, 0.0, 1.0) * (0.12 if drifting else 0.06)
 	_body.rotation.z = lean
+
+
+func _add_number(pos: Vector3, rot: Vector3, pixel: float) -> void:
+	var l := Label3D.new()
+	l.text = str(number)
+	l.font_size = 96
+	l.outline_size = 18
+	l.pixel_size = pixel
+	l.modulate = Color.WHITE
+	l.outline_modulate = Color(0, 0, 0, 1)
+	l.position = pos
+	l.rotation = rot
+	_body.add_child(l)
 
 
 func _add_box(parent: Node3D, size: Vector3, pos: Vector3, color: Color) -> void:

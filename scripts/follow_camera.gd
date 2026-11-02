@@ -9,6 +9,8 @@ const BASE_FOV := 70.0
 const FAST_FOV := 82.0
 
 var target: Node3D
+var orbit := false          # en el menú la cámara gira alrededor del auto
+var _orbit_angle := 0.6
 
 
 func _ready() -> void:
@@ -26,6 +28,14 @@ func _physics_process(delta: float) -> void:
 	if target == null:
 		return
 	var t := 1.0 - exp(-FOLLOW_SHARPNESS * delta)
+	if orbit:
+		_orbit_angle += delta * 0.25
+		var c: Vector3 = target.get_car_position()
+		var want := c + Vector3(cos(_orbit_angle) * 11.0, 3.5, sin(_orbit_angle) * 11.0)
+		global_position = global_position.lerp(want, t)
+		look_at(c + Vector3.UP * 1.0, Vector3.UP)
+		fov = lerpf(fov, BASE_FOV, t)
+		return
 	global_position = global_position.lerp(_desired_position(), t)
 	_look()
 	var kmh: float = target.get_speed_kmh()

@@ -5,6 +5,8 @@ const Track := preload("res://scripts/track.gd")
 const Car := preload("res://scripts/car.gd")
 const FollowCamera := preload("res://scripts/follow_camera.gd")
 const GameUI := preload("res://scripts/ui.gd")
+const Race := preload("res://scripts/race.gd")
+const Menu := preload("res://scripts/menu.gd")
 
 ## Acciones de control y sus teclas (para probar en la computadora).
 const ACTIONS := {
@@ -13,6 +15,7 @@ const ACTIONS := {
 	"izquierda": [KEY_A, KEY_LEFT],
 	"derecha": [KEY_D, KEY_RIGHT],
 	"reiniciar": [KEY_R],
+	"pausa": [KEY_ESCAPE, KEY_P],
 }
 
 
@@ -23,20 +26,34 @@ func _ready() -> void:
 	var track := Track.new()
 	add_child(track)
 
-	var car := Car.new()
-	car.track = track
-	add_child(car)
-	car.respawn_at(track.start_position, track.start_heading)
+	var player := Car.new()
+	player.track = track
+	add_child(player)
+
+	var race := Race.new()
+	race.name = "Race"
+	race.track = track
+	race.player = player
+	add_child(race)
+	player.respawn_callback = race.respawn_on_track
 
 	var camera := FollowCamera.new()
-	camera.target = car
+	camera.target = player
 	add_child(camera)
 	camera.current = true
-	camera.snap()
+	race.state_changed.connect(func(s): camera.orbit = s == Race.State.MENU)
 
 	var ui := GameUI.new()
-	ui.car = car
+	ui.car = player
+	ui.race = race
 	add_child(ui)
+
+	var menu := Menu.new()
+	menu.race = race
+	add_child(menu)
+
+	race.to_menu()
+	camera.snap()
 
 
 func _setup_input() -> void:
