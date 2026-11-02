@@ -1,0 +1,82 @@
+name: Compilar APK Android
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch: # botón "Run workflow" en la pestaña Actions
+
+env:
+  GODOT_VERSION: 4.7.2
+  EXPORT_NAME: turbo-terraceria
+
+jobs:
+  android:
+    name: APK de prueba (debug)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      - name: Instalar Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Caché de Godot
+        id: cache-godot
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/godot-bin
+            ~/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable
+          key: godot-android-${{ env.GODOT_VERSION }}
+
+      - name: Descargar Godot y plantillas de Android
+        if: steps.cache-godot.outputs.cache-hit != 'true'
+        run: |
+          base=https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-stable
+          tpl=~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          mkdir -p ~/godot-bin "$tpl"
+          wget -q "$base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q "Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" -d ~/godot-bin
+          mv ~/godot-bin/Godot_v${GODOT_VERSION}-stable_linux.x86_64 ~/godot-bin/godot
+          wget -q "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          # Solo se extraen las plantillas de Android para ahorrar espacio
+          unzip -q "Godot_v${GODOT_VERSION}-stable_export_templates.tpz" 'templates/android_*' 'templates/version.txt'
+          mv templates/* "$tpl/"
+          rm -rf templates *.zip *.tpz
+
+      - name: Configurar SDK de Android y llave de prueba
+        run: |
+          keytool -genkeypair -v -keystore ~/debug.keystore -storepass android \
+            -alias androiddebugkey -keypass android -keyalg RSA -validity 9999 \
+            -dname "CN=Android Debug,O=Android,C=US"
+          minor=$(echo "$GODOT_VERSION" | cut -d. -f1,2)
+          mkdir -p ~/.config/godot
+          cat > ~/.config/godot/editor_settings-${minor}.tres <<EOF
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/android_sdk_path = "$ANDROID_HOME"
+          export/android/java_sdk_path = "$JAVA_HOME"
+          export/android/debug_keystore = "$HOME/debug.keystore"
+          export/android/debug_keystore_user = "androiddebugkey"
+          export/android/debug_keystore_pass = "android"
+          EOF
+
+      - name: Importar recursos del proyecto
+        run: ~/godot-bin/godot --headless --import --path .
+
+      - name: Exportar APK
+        run: |
+          mkdir -p build/android
+          ~/godot-bin/godot --headless --path . --export-debug "Android" "build/android/${EXPORT_NAME}-debug.apk"
+          test -f "build/android/${EXPORT_NAME}-debug.apk"
+
+      - name: Subir APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.EXPORT_NAME }}-apk
+          path: build/android/*.apk

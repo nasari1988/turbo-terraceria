@@ -1,0 +1,12 @@
+# Godot
+.godot/
+/android/
+*.tmp
+# Compilados
+build/
+*.apk
+*.aab
+# Nunca subir llaves de firma
+*.keystore
+*.jks
+export_credentials.cfg
