@@ -1,4 +1,6 @@
 extends CanvasLayer
+
+const Settings := preload("res://scripts/settings.gd")
 ## Controles táctiles (multitáctil) y HUD de carrera: vuelta, posición,
 ## tiempos, velocímetro, cuenta regresiva y avisos.
 
@@ -17,6 +19,7 @@ var _pause: TouchScreenButton
 var _item: TouchScreenButton
 var _item_label: Label
 var _last_count := -1
+var _using_pad := false
 
 var _hud: Control
 var _speed_label: Label
@@ -73,6 +76,10 @@ func _ready() -> void:
 			show_notice("¡" + powerups.item_name(kind) + "!", Color("ffb347"), 1.2)
 			if sfx: sfx.play("item", -6.0))
 	_on_state(race.state)
+	car.impact.connect(func(strength): _vibrate(int(clampf(strength * 3.0, 25.0, 90.0))))
+	_using_pad = Input.get_connected_joypads().size() > 0
+	Input.joy_connection_changed.connect(func(_d, connected): _set_pad(connected))
+	_apply_touch_visibility()
 
 
 func show_notice(text: String, color := Color.WHITE, seconds := 2.0) -> void:
@@ -88,10 +95,37 @@ func _on_lap(lap_time: float, is_best: bool) -> void:
 	show_notice(t + ("  ¡MEJOR!" if is_best else ""), Color("8ef58e") if is_best else Color.WHITE)
 
 
+## Con control conectado se esconden los botones táctiles; al tocar la
+## pantalla vuelven a aparecer.
+func _input(event: InputEvent) -> void:
+	if event is InputEventJoypadButton or (event is InputEventJoypadMotion and absf(event.axis_value) > 0.5):
+		_set_pad(true)
+	elif event is InputEventScreenTouch:
+		_set_pad(false)
+
+
+func _set_pad(on: bool) -> void:
+	if on != _using_pad:
+		_using_pad = on
+		_apply_touch_visibility()
+
+
+func _apply_touch_visibility() -> void:
+	_on_state(race.state)
+
+
+func _vibrate(ms: int) -> void:
+	if Settings.vibration and not _using_pad:
+		Input.vibrate_handheld(ms)
+	if _using_pad:
+		for id in Input.get_connected_joypads():
+			Input.start_joy_vibration(id, 0.4, 0.8, ms / 1000.0)
+
+
 func _on_state(s: int) -> void:
 	var driving: bool = s == race.State.COUNTDOWN or s == race.State.RACING
 	for b in _buttons:
-		b.visible = driving
+		b.visible = driving and not _using_pad
 	_hud.visible = s != race.State.MENU
 	for l in [_speed_label, _lap_label, _pos_label, _time_label, _laps_info]:
 		l.visible = driving
@@ -141,7 +175,7 @@ func _process(delta: float) -> void:
 
 	# Botón del objeto: solo aparece si traes uno.
 	var driving: bool = race.state == race.State.COUNTDOWN or race.state == race.State.RACING
-	_item.visible = driving and car.item != ""
+	_item.visible = driving and car.item != "" and not _using_pad
 	_item_label.text = powerups.item_name(car.item)
 
 	# Pitidos de la cuenta regresiva.

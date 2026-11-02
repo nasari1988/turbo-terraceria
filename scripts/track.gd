@@ -176,7 +176,7 @@ func _build_scenery() -> void:
 	# Árboles alrededor (sin colisión: quedan fuera de los muros).
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 2026
-	for i in 70:
+	for i in int(70 * preload("res://scripts/settings.gd").scenery_density()):
 		var ang := rng.randf() * TAU
 		var r := rng.randf_range(1.15, 1.9)
 		var pos := Vector3(cos(ang) * OUTER.x * r, 0, sin(ang) * OUTER.y * r * 1.3)

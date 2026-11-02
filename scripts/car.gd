@@ -509,7 +509,7 @@ func _mat(color: Color) -> StandardMaterial3D:
 func _build_effects() -> void:
 	# Polvo de las llantas traseras.
 	_dust = CPUParticles3D.new()
-	_dust.amount = 22
+	_dust.amount = [8, 14, 22][preload("res://scripts/settings.gd").quality]
 	_dust.lifetime = 0.9
 	_dust.local_coords = false
 	_dust.emitting = false

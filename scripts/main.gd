@@ -3,6 +3,7 @@ extends Node3D
 ## los controles y el menú. Lo elegido vive en game_state.gd.
 
 const GameState := preload("res://scripts/game_state.gd")
+const Settings := preload("res://scripts/settings.gd")
 const Track := preload("res://scripts/track.gd")
 const SplineTrack := preload("res://scripts/spline_track.gd")
 const Car := preload("res://scripts/car.gd")
@@ -25,8 +26,15 @@ const ACTIONS := {
 }
 
 
+var _sun: DirectionalLight3D
+var _menu: Node
+
+
 func _ready() -> void:
 	_setup_input()
+	Settings.load_settings()
+	DisplayServer.screen_set_keep_on(true)
+	Engine.max_fps = 60
 
 	var sfx := Sfx.new()
 	sfx.name = "Sfx"
@@ -80,6 +88,8 @@ func _ready() -> void:
 	menu.race = race
 	menu.sfx = sfx
 	add_child(menu)
+	_menu = menu
+	apply_quality()
 
 	race.to_menu()
 	camera.snap()
@@ -90,14 +100,64 @@ func _ready() -> void:
 		camera.snap()
 
 
+## Botones y ejes de control (Bluetooth/USB, distribución tipo Xbox).
+const PAD_BUTTONS := {
+	"acelerar": [JOY_BUTTON_A],
+	"frenar": [JOY_BUTTON_B, JOY_BUTTON_X],
+	"izquierda": [JOY_BUTTON_DPAD_LEFT],
+	"derecha": [JOY_BUTTON_DPAD_RIGHT],
+	"reiniciar": [JOY_BUTTON_BACK],
+	"pausa": [JOY_BUTTON_START],
+	"usar": [JOY_BUTTON_Y, JOY_BUTTON_RIGHT_SHOULDER, JOY_BUTTON_LEFT_SHOULDER],
+}
+## [acción, eje, dirección]
+const PAD_AXES := [
+	["acelerar", JOY_AXIS_TRIGGER_RIGHT, 1.0],
+	["frenar", JOY_AXIS_TRIGGER_LEFT, 1.0],
+	["izquierda", JOY_AXIS_LEFT_X, -1.0],
+	["derecha", JOY_AXIS_LEFT_X, 1.0],
+]
+
+
 func _setup_input() -> void:
+	if InputMap.has_action("acelerar"):
+		return  # ya configurado (la escena se recarga entre carreras)
 	for action in ACTIONS:
-		if not InputMap.has_action(action):
-			InputMap.add_action(action)
+		InputMap.add_action(action, 0.2)
 		for key in ACTIONS[action]:
 			var ev := InputEventKey.new()
 			ev.physical_keycode = key
 			InputMap.action_add_event(action, ev)
+		for button in PAD_BUTTONS.get(action, []):
+			var jb := InputEventJoypadButton.new()
+			jb.button_index = button
+			InputMap.action_add_event(action, jb)
+	for a in PAD_AXES:
+		var jm := InputEventJoypadMotion.new()
+		jm.axis = a[1]
+		jm.axis_value = a[2]
+		InputMap.action_add_event(a[0], jm)
+	# Botones de menú (aceptar/regresar) con el control.
+	var accept := InputEventJoypadButton.new()
+	accept.button_index = JOY_BUTTON_A
+	InputMap.action_add_event("ui_accept", accept)
+
+
+## Aplica la calidad gráfica elegida (resolución 3D y sombras).
+func apply_quality() -> void:
+	var vp := get_viewport()
+	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
+	vp.scaling_3d_scale = Settings.render_scale()
+	if _sun:
+		_sun.shadow_enabled = Settings.shadows()
+		_sun.directional_shadow_max_distance = 90.0 if Settings.quality == 2 else 55.0
+
+
+## Si el jugador sale de la app (llamada, notificación…), se pausa la carrera.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_APPLICATION_PAUSED:
+		if _menu and _menu.has_method("pause_from_outside"):
+			_menu.pause_from_outside()
 
 
 func _setup_environment(t: Dictionary) -> void:
@@ -124,6 +184,7 @@ func _setup_environment(t: Dictionary) -> void:
 	add_child(world)
 
 	var sun := DirectionalLight3D.new()
+	_sun = sun
 	sun.rotation_degrees = Vector3(-55, 35, 0)
 	sun.light_energy = t.sun_energy
 	sun.light_color = t.sun

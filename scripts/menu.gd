@@ -3,6 +3,7 @@ extends CanvasLayer
 ## Funciona aunque el juego esté en pausa.
 
 const GameState := preload("res://scripts/game_state.gd")
+const Settings := preload("res://scripts/settings.gd")
 
 var race: Node
 var sfx: Node
@@ -16,6 +17,9 @@ var _cars: VBoxContainer
 var _pause: VBoxContainer
 var _results: VBoxContainer
 var _tour: VBoxContainer
+var _options: VBoxContainer
+var _vibe_button: Button
+var _quality_button: Button
 var _results_table: GridContainer
 var _results_title: Label
 var _results_extra: Label
@@ -48,6 +52,7 @@ func _ready() -> void:
 	_build_pause()
 	_build_results()
 	_build_tournament()
+	_build_options()
 
 	race.state_changed.connect(_on_state)
 	race.player_finished.connect(func():
@@ -93,11 +98,41 @@ func _build_main() -> void:
 	_change_laps(0)
 	_change_difficulty(0)
 
-	_sound_button = _small_button("", _toggle_sound)
-	_sound_button.custom_minimum_size = Vector2(420, 60)
-	_sound_button.add_theme_font_size_override("font_size", 26)
-	_main.add_child(_sound_button)
+	_main.add_child(_button("AJUSTES", func(): _show(_options)))
+
+
+func _build_options() -> void:
+	_options = _panel()
+	_options.add_child(_label("AJUSTES", 60, Color("ffd166")))
+	_sound_button = _button("", _toggle_sound)
+	_options.add_child(_sound_button)
+	_vibe_button = _button("", func():
+		Settings.vibration = not Settings.vibration
+		Settings.save()
+		_refresh_options())
+	_options.add_child(_vibe_button)
+	_quality_button = _button("", func():
+		Settings.quality = (Settings.quality + 2) % 3
+		Settings.save()
+		_refresh_options()
+		_apply_quality())
+	_options.add_child(_quality_button)
+	_options.add_child(_label("Si el juego se siente lento, baja la calidad.\nEl cambio de decoración se nota en la siguiente carrera.", 22, Color(1, 1, 1, 0.8)))
+	_options.add_child(_back_button(func(): _show(_main)))
 	_apply_sound()
+	_refresh_options()
+
+
+func _refresh_options() -> void:
+	_sound_button.text = "Sonido: " + ("SÍ" if _sound_on else "NO")
+	_vibe_button.text = "Vibración: " + ("SÍ" if Settings.vibration else "NO")
+	_quality_button.text = "Calidad gráfica: " + Settings.QUALITY_NAMES[Settings.quality]
+
+
+func _apply_quality() -> void:
+	var main := get_parent()
+	if main.has_method("apply_quality"):
+		main.apply_quality()
 
 
 func _choose(kind: String) -> void:
@@ -324,7 +359,7 @@ func _on_state(s: int) -> void:
 
 
 func _show(panel: Control) -> void:
-	for p in [_main, _tracks, _cars, _pause, _results, _tour]:
+	for p in [_main, _tracks, _cars, _pause, _results, _tour, _options]:
 		p.get_parent().visible = p == panel
 	_dim.visible = panel != null
 
@@ -353,19 +388,17 @@ func _apply_sound() -> void:
 
 
 func _load_settings() -> void:
-	var cfg := ConfigFile.new()
-	if cfg.load(SETTINGS_PATH) == OK:
-		_laps = cfg.get_value("carrera", "vueltas", 3)
-		race.difficulty = cfg.get_value("carrera", "dificultad", 1)
-		_sound_on = cfg.get_value("general", "sonido", true)
+	Settings.load_settings()
+	_laps = Settings.laps
+	race.difficulty = Settings.difficulty
+	_sound_on = Settings.sound
 
 
 func _save_settings() -> void:
-	var cfg := ConfigFile.new()
-	cfg.set_value("carrera", "vueltas", _laps)
-	cfg.set_value("carrera", "dificultad", race.difficulty)
-	cfg.set_value("general", "sonido", _sound_on)
-	cfg.save(SETTINGS_PATH)
+	Settings.laps = _laps
+	Settings.difficulty = race.difficulty
+	Settings.sound = _sound_on
+	Settings.save()
 
 
 func _change_laps(step: int) -> void:
@@ -375,6 +408,11 @@ func _change_laps(step: int) -> void:
 	_laps_label.text = "%d vuelta%s" % [_laps, "" if _laps == 1 else "s"]
 	if step != 0:
 		_save_settings()
+
+
+func pause_from_outside() -> void:
+	if not get_tree().paused and (race.state == race.State.COUNTDOWN or race.state == race.State.RACING):
+		_open_pause()
 
 
 func _open_pause() -> void:

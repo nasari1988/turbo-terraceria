@@ -425,7 +425,8 @@ func _build_scenery() -> void:
 
 ## Reparte copias de `mesh` fuera de la pista, entre `min_d` y `max_d` metros
 ## del muro. Con `face_road`, se orientan hacia el camino.
-func _scatter(mesh: Mesh, count: int, min_d: float, max_d: float, smin: float, smax: float, face_road := false) -> void:
+func _scatter(mesh: Mesh, total: int, min_d: float, max_d: float, smin: float, smax: float, face_road := false) -> void:
+	var count := maxi(1, int(total * preload("res://scripts/settings.gd").scenery_density()))
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.mesh = mesh

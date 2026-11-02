@@ -26,7 +26,15 @@ Juego de carreras arcade para Android hecho con **Godot 4.7.2**.
 
 Si ves un auto rojo girando sobre un piso café y al tocar la pantalla cambia de color, la Fase 0 está completa.
 
-## Fase 4: autos, pistas y torneo (actual)
+## Fase 5: pulido y preparación para Google Play (actual)
+
+- **Control Bluetooth/USB:** gatillo derecho o A = gas, gatillo izquierdo o B/X = freno, palanca o cruceta = dirección, Y o bumpers = usar objeto, Start = pausa, Back = volver a la pista. Al usar el control se esconden los botones táctiles.
+- **Ajustes:** sonido, vibración y **calidad gráfica** (Alta / Media / Baja: resolución, sombras, decoración y polvo).
+- **Vibración** en choques y ataques. La pantalla no se apaga en carrera y el juego se pausa si sales de la app.
+- **Ícono propio, pantalla de carga** y material para la tienda en `play/` (ícono 512, gráfico destacado, capturas, ficha y política de privacidad).
+- **AAB para Google Play:** flujo `Compilar AAB para Google Play` (ver `play/PUBLICAR.md`).
+
+## Fase 4: autos, pistas y torneo
 
 - **5 pistas:** Óvalo de Tierra, Cañón Seco (desierto), Pico Helado (nieve, poco agarre), Sendero del Bosque y Calles del Pueblo. Cada una con su decoración, colores, cielo y polvo.
 - **4 autos con forma de stock car** y estadísticas distintas: Coyote (equilibrado), Liebre (aceleración), Halcón (manejo) y Toro (pesado y veloz).
@@ -85,6 +93,8 @@ scripts/powerups.gd               Cajas de objetos y sus efectos
 scripts/sfx.gd                    Sonidos y música generados por código
 scripts/spline_track.gd           Pistas temáticas (desierto, nieve, bosque, pueblo)
 scripts/game_state.gd             Autos, pistas, torneo y progreso guardado
+scripts/settings.gd               Ajustes del jugador (sonido, vibración, calidad)
+play/                             Material y guía para publicar en Google Play
 .github/workflows/android.yml     Compilación automática del APK
 ```
 

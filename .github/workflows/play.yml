@@ -1,0 +1,108 @@
+name: Compilar AAB para Google Play
+
+# Se ejecuta a mano (pestaña Actions → "Run workflow"), al crear una etiqueta
+# v1.0, v1.1... o cuando cambia este archivo.
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+    branches: [main]
+    paths: [".github/workflows/play.yml"]
+
+env:
+  GODOT_VERSION: 4.7.2
+  EXPORT_NAME: turbo-terraceria
+
+jobs:
+  aab:
+    name: AAB firmado para Google Play
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Caché de Godot
+        id: cache-godot
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/godot-bin
+            ~/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable
+          key: godot-android-${{ env.GODOT_VERSION }}
+
+      - name: Descargar Godot y plantillas de Android
+        if: steps.cache-godot.outputs.cache-hit != 'true'
+        run: |
+          base=https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-stable
+          tpl=~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          mkdir -p ~/godot-bin "$tpl"
+          wget -q "$base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q "Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" -d ~/godot-bin
+          mv ~/godot-bin/Godot_v${GODOT_VERSION}-stable_linux.x86_64 ~/godot-bin/godot
+          wget -q "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          unzip -q "Godot_v${GODOT_VERSION}-stable_export_templates.tpz" 'templates/android_*' 'templates/version.txt'
+          mv templates/* "$tpl/"
+          rm -rf templates *.zip *.tpz
+
+      - name: Llave de publicación
+        id: llave
+        env:
+          KS_B64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          KS_USER: ${{ secrets.RELEASE_KEYSTORE_USER }}
+          KS_PASS: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 --decode > ~/release.keystore
+            echo "GODOT_ANDROID_KEYSTORE_RELEASE_USER=$KS_USER" >> "$GITHUB_ENV"
+            echo "GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD=$KS_PASS" >> "$GITHUB_ENV"
+            echo "tipo=publicacion" >> "$GITHUB_OUTPUT"
+          else
+            # Sin llave guardada: se usa una temporal solo para comprobar que compila.
+            keytool -genkeypair -keystore ~/release.keystore -storepass temporal \
+              -alias temporal -keypass temporal -keyalg RSA -validity 1000 \
+              -dname "CN=Prueba,O=Prueba,C=MX"
+            echo "GODOT_ANDROID_KEYSTORE_RELEASE_USER=temporal" >> "$GITHUB_ENV"
+            echo "GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD=temporal" >> "$GITHUB_ENV"
+            echo "tipo=PRUEBA-NO-SUBIR" >> "$GITHUB_OUTPUT"
+          fi
+          echo "GODOT_ANDROID_KEYSTORE_RELEASE_PATH=$HOME/release.keystore" >> "$GITHUB_ENV"
+
+      - name: Configurar SDK de Android
+        run: |
+          minor=$(echo "$GODOT_VERSION" | cut -d. -f1,2)
+          mkdir -p ~/.config/godot
+          cat > ~/.config/godot/editor_settings-${minor}.tres <<EOF
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/android_sdk_path = "$ANDROID_HOME"
+          export/android/java_sdk_path = "$JAVA_HOME"
+          EOF
+
+      - name: Número de versión
+        run: |
+          # Google Play exige un número de versión mayor en cada subida.
+          code=$((100 + GITHUB_RUN_NUMBER))
+          sed -i "s/^version\/code=.*/version\/code=${code}/" export_presets.cfg
+          echo "versionCode = $code"
+
+      - name: Importar recursos
+        run: ~/godot-bin/godot --headless --import --path .
+
+      - name: Exportar AAB
+        run: |
+          mkdir -p build/play
+          ~/godot-bin/godot --headless --path . --install-android-build-template \
+            --export-release "Android Play" "build/play/${EXPORT_NAME}.aab"
+          test -f "build/play/${EXPORT_NAME}.aab"
+          ls -la build/play
+
+      - name: Subir AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.EXPORT_NAME }}-aab-${{ steps.llave.outputs.tipo }}
+          path: build/play/*.aab

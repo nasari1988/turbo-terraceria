@@ -3,6 +3,8 @@ extends Node3D
 ## TURBO (empujón), ESCUDO (protege), ACEITE (mancha que hace girar) y
 ## ONDA (empuja a los autos cercanos).
 
+const Settings := preload("res://scripts/settings.gd")
+
 signal item_picked(car: Node3D, kind: String)
 signal item_used(car: Node3D, kind: String)
 
@@ -188,7 +190,8 @@ func _drop_oil(owner_car: Node3D) -> void:
 			return
 		if victim == owner_car and OIL_LIFETIME - oil.time < oil.grace:
 			return
-		victim.hit("aceite")
+		if victim.hit("aceite") and victim.use_player_input and Settings.vibration:
+			Input.vibrate_handheld(120)
 		oil.time = 0.0)
 	if owner_car.has_method("_play"):
 		owner_car._play("aceite", -4.0, 1.3)
@@ -203,7 +206,8 @@ func _shock_wave(source: Node3D) -> void:
 		d.y = 0.0
 		if d.length() < WAVE_RADIUS:
 			var push := d.normalized() * 13.0 + Vector3.UP * 5.0
-			c.hit("onda", push)
+			if c.hit("onda", push) and c.use_player_input and Settings.vibration:
+				Input.vibrate_handheld(150)
 	_ring_effect(center)
 	var sfx := get_tree().get_first_node_in_group("sfx")
 	if sfx:
