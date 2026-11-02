@@ -6,6 +6,9 @@ on:
   pull_request:
   workflow_dispatch: # botón "Run workflow" en la pestaña Actions
 
+permissions:
+  contents: write # para publicar el APK en Releases
+
 env:
   GODOT_VERSION: 4.7.2
   EXPORT_NAME: turbo-terraceria
@@ -79,3 +82,15 @@ jobs:
         with:
           name: ${{ env.EXPORT_NAME }}-apk
           path: build/android/*.apk
+
+      - name: Publicar en Releases (enlace fijo de descarga)
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release delete ultima-version --yes --cleanup-tag || true
+          gh release create ultima-version build/android/${EXPORT_NAME}-debug.apk \
+            --title "Última versión (prueba)" \
+            --notes "APK de prueba generado automáticamente del commit ${GITHUB_SHA::7}." \
+            --prerelease --target "$GITHUB_SHA"

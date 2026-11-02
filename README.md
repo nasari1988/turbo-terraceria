@@ -19,7 +19,9 @@ Juego de carreras arcade para Android hecho con **Godot 4.7.2**.
      git push -u origin main
      ```
 3. **Espera la compilación:** entra a la pestaña **Actions**. El flujo *Compilar APK Android* arranca solo. La primera vez tarda unos 5–8 minutos porque descarga Godot; después usa la caché.
-4. **Descarga el APK:** abre la ejecución en verde y, en la sección **Artifacts**, descarga `turbo-terraceria-apk` (viene en un .zip).
+4. **Descarga el APK:** cada versión nueva queda en este enlace fijo, sin zip:
+   https://github.com/nasari1988/turbo-terraceria/releases/download/ultima-version/turbo-terraceria-debug.apk
+   (también está como `turbo-terraceria-apk` en la sección **Artifacts** de cada ejecución).
 5. **Instálalo en tu teléfono:** pasa el `.apk` al teléfono y ábrelo. Android pedirá permiso para "instalar apps desconocidas".
 
 Si ves un auto rojo girando sobre un piso café y al tocar la pantalla cambia de color, la Fase 0 está completa.
