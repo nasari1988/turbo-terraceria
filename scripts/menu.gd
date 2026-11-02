@@ -11,6 +11,8 @@ var _results_table: GridContainer
 var _results_title: Label
 var _laps_label: Label
 var _laps := 3
+var _difficulty_label: Label
+const SETTINGS_PATH := "user://ajustes.cfg"
 const LAP_OPTIONS := [1, 3, 5, 10]
 
 
@@ -61,7 +63,20 @@ func _build_main() -> void:
 	laps_row.add_child(_laps_label)
 	laps_row.add_child(_small_button(">", func(): _change_laps(1)))
 	_main.add_child(laps_row)
+
+	var diff_row := HBoxContainer.new()
+	diff_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	diff_row.add_theme_constant_override("separation", 16)
+	diff_row.add_child(_small_button("<", func(): _change_difficulty(-1)))
+	_difficulty_label = _label("", 34)
+	_difficulty_label.custom_minimum_size = Vector2(240, 0)
+	diff_row.add_child(_difficulty_label)
+	diff_row.add_child(_small_button(">", func(): _change_difficulty(1)))
+	_main.add_child(diff_row)
+
+	_load_settings()
 	_change_laps(0)
+	_change_difficulty(0)
 
 	_main.add_child(_button("PRÁCTICA LIBRE", func(): _start(race.Mode.PRACTICE)))
 
@@ -133,11 +148,36 @@ func _start(mode: int) -> void:
 	race.start(mode, _laps)
 
 
+func _change_difficulty(step: int) -> void:
+	race.difficulty = clampi(race.difficulty + step, 0, race.DIFFICULTIES.size() - 1)
+	var colors := [Color("8ef58e"), Color.WHITE, Color("ff6b6b")]
+	_difficulty_label.text = "Rivales: " + race.DIFFICULTIES[race.difficulty].name
+	_difficulty_label.add_theme_color_override("font_color", colors[race.difficulty])
+	if step != 0:
+		_save_settings()
+
+
+func _load_settings() -> void:
+	var cfg := ConfigFile.new()
+	if cfg.load(SETTINGS_PATH) == OK:
+		_laps = cfg.get_value("carrera", "vueltas", 3)
+		race.difficulty = cfg.get_value("carrera", "dificultad", 1)
+
+
+func _save_settings() -> void:
+	var cfg := ConfigFile.new()
+	cfg.set_value("carrera", "vueltas", _laps)
+	cfg.set_value("carrera", "dificultad", race.difficulty)
+	cfg.save(SETTINGS_PATH)
+
+
 func _change_laps(step: int) -> void:
 	var i := LAP_OPTIONS.find(_laps)
 	i = clampi(i + step, 0, LAP_OPTIONS.size() - 1)
 	_laps = LAP_OPTIONS[i]
 	_laps_label.text = "%d vuelta%s" % [_laps, "" if _laps == 1 else "s"]
+	if step != 0:
+		_save_settings()
 
 
 func _open_pause() -> void:

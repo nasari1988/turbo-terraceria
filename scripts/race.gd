@@ -23,12 +23,21 @@ const RIVALS := [
 ]
 const COUNTDOWN_TIME := 3.0
 
+## Dificultad: multiplica la potencia de los rivales y cambia qué tanto
+## arriesgan con el atajo y cuánta ayuda reciben al quedarse atrás.
+const DIFFICULTIES := [
+	{"name": "Fácil", "power": 0.88, "shortcut": 0.15, "catch_up": 1.02},
+	{"name": "Normal", "power": 1.0, "shortcut": 0.4, "catch_up": 1.06},
+	{"name": "Difícil", "power": 1.06, "shortcut": 0.6, "catch_up": 1.1},
+]
+
 var track: Node3D
 var player: Node3D
 var cars: Array = []          # el jugador siempre es cars[0]
 var state := State.MENU
 var mode := Mode.RACE
 var laps := 3
+var difficulty := 1
 
 var countdown := 0.0
 var race_time := 0.0
@@ -62,14 +71,15 @@ func start(new_mode: int, new_laps: int) -> void:
 			c.display_name = r.name
 			c.number = r.number
 			c.body_color = r.color
-			c.power = r.power
+			c.power = r.power * DIFFICULTIES[difficulty].power
 			c.use_player_input = false
 			c.track = track
 			c.respawn_callback = respawn_on_track
 			get_parent().add_child(c)
 			_rivals.append(c)
 			cars.append(c)
-			_add_driver(c, (i % 3 - 1) * 2.5)
+			var d := _add_driver(c, (i % 3 - 1) * 2.5)
+			d.shortcut_chance = DIFFICULTIES[difficulty].shortcut
 
 	# Parrilla: el jugador sale al final para tener a quién rebasar.
 	var order := cars.slice(1)
@@ -113,7 +123,7 @@ func _clear() -> void:
 	_rivals.clear()
 
 
-func _add_driver(c: Node3D, lane: float) -> void:
+func _add_driver(c: Node3D, lane: float) -> Node:
 	var d := AIDriver.new()
 	d.car = c
 	d.track = track
@@ -121,6 +131,7 @@ func _add_driver(c: Node3D, lane: float) -> void:
 	d.cars = cars
 	add_child(d)
 	_drivers.append(d)
+	return d
 
 
 func _set_state(s: int) -> void:
@@ -193,9 +204,9 @@ func _on_player_finished() -> void:
 func _rubber_band() -> void:
 	for i in _rivals.size():
 		var r: Node3D = _rivals[i]
-		var base: float = RIVALS[i].power
+		var base: float = RIVALS[i].power * DIFFICULTIES[difficulty].power
 		var gap: float = r.race_progress - player.race_progress
-		r.power = base * clampf(1.0 - gap * 0.02, 0.94, 1.06)
+		r.power = base * clampf(1.0 - gap * 0.02, 0.94, DIFFICULTIES[difficulty].catch_up)
 
 
 # ---------------------------------------------------------------- datos
