@@ -8,5 +8,7 @@ build/
 *.aab
 # Nunca subir llaves de firma
 *.keystore
+# Excepción: llave de PRUEBA (debug), con contraseña pública "android". No sirve para Google Play.
+!ci/debug.keystore
 *.jks
 export_credentials.cfg

@@ -50,9 +50,8 @@ jobs:
 
       - name: Configurar SDK de Android y llave de prueba
         run: |
-          keytool -genkeypair -v -keystore ~/debug.keystore -storepass android \
-            -alias androiddebugkey -keypass android -keyalg RSA -validity 9999 \
-            -dname "CN=Android Debug,O=Android,C=US"
+          # Llave de prueba fija: así cada APK nuevo se instala encima del anterior.
+          cp ci/debug.keystore ~/debug.keystore
           minor=$(echo "$GODOT_VERSION" | cut -d. -f1,2)
           mkdir -p ~/.config/godot
           cat > ~/.config/godot/editor_settings-${minor}.tres <<EOF

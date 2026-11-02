@@ -54,6 +54,6 @@ scripts/ui.gd                     Botones táctiles y velocímetro
 
 ## Notas
 
-- El APK que se genera es de **prueba (debug)**, firmado con una llave temporal. Sirve para instalarlo en tu teléfono, pero no para Google Play. La firma de *release* se configura en la Fase 5.
+- El APK que se genera es de **prueba (debug)**, firmado con la llave de prueba `ci/debug.keystore` (siempre la misma, para que cada versión se instale encima de la anterior). Sirve para instalarlo en tu teléfono, pero no para Google Play. La firma de *release* se configura en la Fase 5.
 - Antes de publicar, cambia `package/unique_name` (`com.ejemplo.turboterraceria`) por uno tuyo. Después de publicar ya no se puede cambiar.
 - Nunca subas archivos `.keystore` al repositorio: el `.gitignore` ya los excluye.
