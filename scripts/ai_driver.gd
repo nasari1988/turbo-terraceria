@@ -33,8 +33,10 @@ func _physics_process(delta: float) -> void:
 	var p: Vector3 = car.get_car_position()
 	var angle: float = track.progress_angle(p)
 
-	# ¿Atajo? Se decide una vez por vuelta, al acercarse a la curva derecha.
-	if angle < -0.9 and angle > -1.4:
+	# ¿Atajo? (solo en el óvalo) Se decide una vez por vuelta.
+	if not track.has_shortcut:
+		_taking_shortcut = false
+	elif angle < -0.9 and angle > -1.4:
 		_decided_this_lap = false
 	if not _decided_this_lap and angle > -0.6 and angle < 0.0 and p.x > 45.0:
 		_decided_this_lap = true
@@ -50,7 +52,7 @@ func _physics_process(delta: float) -> void:
 	else:
 		_lane_wobble += delta * 0.4
 		var l := lane + sin(_lane_wobble) * 1.0
-		target = track.centerline_point(angle + LOOKAHEAD, l)
+		target = track.centerline_point(angle + track.lookahead(), l)
 
 	var fwd: Vector3 = car.get_forward_flat()
 	var right := fwd.cross(Vector3.UP)
@@ -66,6 +68,12 @@ func _physics_process(delta: float) -> void:
 	# Curva cerrada a buena velocidad: derrapa.
 	if absf(turn) > 0.55 and car.speed > 15.0:
 		brake = 1.0
+	# Curva cerrada adelante: suelta el acelerador si va muy rápido.
+	var safe_speed: float = track.curve_radius_ahead(angle) * 2.0 * (0.8 + 0.2 * track.grip) + 4.0
+	if car.speed > safe_speed:
+		gas = 0.0
+		if car.speed > safe_speed + 6.0 and absf(turn) > 0.2:
+			brake = 1.0
 
 	# Atorado (contra un muro o un auto): reversa un momento.
 	if car.speed < 1.5 and car.speed > -1.5:

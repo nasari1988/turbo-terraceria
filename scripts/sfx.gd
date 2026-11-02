@@ -6,6 +6,7 @@ extends Node
 const RATE := 22050
 
 var streams := {}
+static var _cache := {}   # se conservan al recargar la escena
 var music_player: AudioStreamPlayer
 var _pool: Array[AudioStreamPlayer] = []
 var _pool3d: Array[AudioStreamPlayer3D] = []
@@ -15,6 +16,15 @@ var _rng := RandomNumberGenerator.new()
 func _ready() -> void:
 	add_to_group("sfx")
 	_rng.seed = 7
+	if not _cache.is_empty():
+		streams = _cache
+	else:
+		_generate()
+		_cache = streams
+	_make_players()
+
+
+func _generate() -> void:
 	streams.motor = _wav(_make_engine(), true)
 	streams.derrape = _wav(_make_skid(), true)
 	streams.golpe = _wav(_make_hit())
@@ -27,6 +37,8 @@ func _ready() -> void:
 	streams.escudo = _wav(_make_shimmer())
 	streams.meta = _wav(_make_blips([0, 4, 7, 12, 16, 19, 24], 0.09, 523.0))
 
+
+func _make_players() -> void:
 	for i in 8:
 		var p := AudioStreamPlayer.new()
 		add_child(p)
@@ -40,7 +52,11 @@ func _ready() -> void:
 	music_player = AudioStreamPlayer.new()
 	music_player.volume_db = -13.0
 	add_child(music_player)
-	WorkerThreadPool.add_task(_build_music)
+	if streams.has("musica"):
+		music_player.stream = streams.musica
+		music_player.play()
+	else:
+		WorkerThreadPool.add_task(_build_music)
 
 
 # ------------------------------------------------------------- reproducir

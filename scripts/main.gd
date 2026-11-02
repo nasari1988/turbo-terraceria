@@ -1,7 +1,10 @@
 extends Node3D
-## Escena principal de la Fase 1: arma la pista, el auto, la cámara y los controles.
+## Escena principal: arma la pista elegida, el auto, la carrera, la cámara,
+## los controles y el menú. Lo elegido vive en game_state.gd.
 
+const GameState := preload("res://scripts/game_state.gd")
 const Track := preload("res://scripts/track.gd")
+const SplineTrack := preload("res://scripts/spline_track.gd")
 const Car := preload("res://scripts/car.gd")
 const FollowCamera := preload("res://scripts/follow_camera.gd")
 const GameUI := preload("res://scripts/ui.gd")
@@ -24,17 +27,26 @@ const ACTIONS := {
 
 func _ready() -> void:
 	_setup_input()
-	_setup_environment()
 
 	var sfx := Sfx.new()
 	sfx.name = "Sfx"
 	add_child(sfx)
 
-	var track := Track.new()
+	var track: Node3D
+	if GameState.track_id == "ovalo":
+		track = Track.new()
+	else:
+		track = SplineTrack.new()
+		track.theme_id = GameState.track_id
 	add_child(track)
+	_setup_environment(track.environment_settings())
 
+	var car_data: Dictionary = GameState.CARS[GameState.car_id]
 	var player := Car.new()
 	player.track = track
+	player.apply_type(GameState.car_id, car_data)
+	player.body_color = car_data.color
+	player.number = car_data.number
 	add_child(player)
 
 	var race := Race.new()
@@ -71,6 +83,11 @@ func _ready() -> void:
 
 	race.to_menu()
 	camera.snap()
+	if GameState.autostart:
+		GameState.autostart = false
+		race.start(GameState.mode, GameState.laps)
+		camera.orbit = false
+		camera.snap()
 
 
 func _setup_input() -> void:
@@ -83,11 +100,11 @@ func _setup_input() -> void:
 			InputMap.action_add_event(action, ev)
 
 
-func _setup_environment() -> void:
+func _setup_environment(t: Dictionary) -> void:
 	var sky_mat := ProceduralSkyMaterial.new()
-	sky_mat.sky_top_color = Color("4a90d9")
-	sky_mat.sky_horizon_color = Color("bfe0ff")
-	sky_mat.ground_horizon_color = Color("bfe0ff")
+	sky_mat.sky_top_color = t.sky_top
+	sky_mat.sky_horizon_color = t.sky_horizon
+	sky_mat.ground_horizon_color = t.sky_horizon
 	var sky := Sky.new()
 	sky.sky_material = sky_mat
 	var env := Environment.new()
@@ -97,13 +114,19 @@ func _setup_environment() -> void:
 	env.ambient_light_color = Color("9fb4d0")
 	env.ambient_light_energy = 0.45
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	if t.fog > 0.0:
+		env.fog_enabled = true
+		env.fog_light_color = t.sky_horizon
+		env.fog_density = t.fog
+		env.fog_sky_affect = 0.3
 	var world := WorldEnvironment.new()
 	world.environment = env
 	add_child(world)
 
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-55, 35, 0)
-	sun.light_energy = 0.9
+	sun.light_energy = t.sun_energy
+	sun.light_color = t.sun
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 90.0
 	add_child(sun)

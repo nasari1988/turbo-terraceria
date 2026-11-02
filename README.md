@@ -26,7 +26,15 @@ Juego de carreras arcade para Android hecho con **Godot 4.7.2**.
 
 Si ves un auto rojo girando sobre un piso café y al tocar la pantalla cambia de color, la Fase 0 está completa.
 
-## Fase 3: el toque "Rumble" (actual)
+## Fase 4: autos, pistas y torneo (actual)
+
+- **5 pistas:** Óvalo de Tierra, Cañón Seco (desierto), Pico Helado (nieve, poco agarre), Sendero del Bosque y Calles del Pueblo. Cada una con su decoración, colores, cielo y polvo.
+- **4 autos con forma de stock car** y estadísticas distintas: Coyote (equilibrado), Liebre (aceleración), Halcón (manejo) y Toro (pesado y veloz).
+- **Torneo:** 4 carreras (desierto, nieve, bosque, pueblo) con puntos 10-8-6-4-2-1.
+- **Desbloqueables:** sube al podio en una pista para abrir la siguiente; gana una carrera para el Halcón y el torneo para el Toro.
+- **Progreso guardado:** desbloqueos y mejor vuelta por pista.
+
+## Fase 3: el toque "Rumble"
 
 - **Cajas de power-ups** (cubos amarillos con ?): antes de la rampa, al salir de la curva derecha, en la recta de arriba y en el atajo. El botón naranja muestra el objeto; tócalo para usarlo (E / Shift en la computadora).
   - **TURBO:** empujón de velocidad.
@@ -75,6 +83,8 @@ scripts/ai_driver.gd              Pilotos con IA
 scripts/menu.gd                   Menú principal, pausa y resultados
 scripts/powerups.gd               Cajas de objetos y sus efectos
 scripts/sfx.gd                    Sonidos y música generados por código
+scripts/spline_track.gd           Pistas temáticas (desierto, nieve, bosque, pueblo)
+scripts/game_state.gd             Autos, pistas, torneo y progreso guardado
 .github/workflows/android.yml     Compilación automática del APK
 ```
 

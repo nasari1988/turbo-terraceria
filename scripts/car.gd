@@ -26,6 +26,13 @@ var display_name := "Tú"
 var number := 7
 var body_color := Color("e63946")
 var power := 1.0             # multiplicador de aceleración (la IA usa menos de 1)
+var car_type := "coyote"     # forma del auto (ver game_state.gd)
+var shape := {"length": 1.0, "width": 1.0, "roof": 1.0, "spoiler": 1.0}
+var accel_stat := ACCEL
+var drag_stat := DRAG
+var turn_stat := TURN_SPEED
+var grip_stat := GRIP
+var mass_stat := 1.0
 var use_player_input := true # false = lo maneja la IA (escribe en input_*)
 var controls_enabled := true # false = congelado (cuenta regresiva)
 var respawn_callback: Callable  # la carrera decide dónde reaparecer
@@ -73,6 +80,18 @@ var _shield_mesh: MeshInstance3D
 var _engine: AudioStreamPlayer3D
 var _skid: AudioStreamPlayer3D
 var _sfx: Node
+
+
+## Copia las estadísticas y la forma de un tipo de auto.
+func apply_type(id: String, data: Dictionary, stats := true) -> void:
+	car_type = id
+	shape = data.shape
+	if stats:
+		accel_stat = data.accel
+		drag_stat = data.drag
+		turn_stat = data.turn
+		grip_stat = data.grip
+		mass_stat = data.mass
 
 
 func _ready() -> void:
@@ -226,7 +245,7 @@ func _physics_process(delta: float) -> void:
 	var turn_speed := maxf(absf(speed), maxf(gas, brake) * 5.0)
 	if turn_speed > 0.5:
 		var direction := -1.0 if speed < -0.5 or (brake > 0.0 and gas == 0.0 and speed < 1.0) else 1.0
-		var turn := steer * TURN_SPEED * clampf(turn_speed / 8.0, 0.0, 1.0) * direction
+		var turn := steer * turn_stat * clampf(turn_speed / 8.0, 0.0, 1.0) * direction
 		if drifting:
 			turn *= DRIFT_TURN_BONUS
 		if not grounded:
@@ -243,7 +262,7 @@ func _physics_process(delta: float) -> void:
 		var forward := fwd_flat.slide(normal).normalized()
 		var right := forward.cross(normal).normalized()
 
-		var drive := ACCEL * power * gas
+		var drive := accel_stat * power * gas
 		if boost_time > 0.0:
 			drive += BOOST_ACCEL
 		if brake > 0.0:
@@ -266,10 +285,11 @@ func _physics_process(delta: float) -> void:
 		else:
 			# Agarre lateral: quita parte del deslizamiento de lado.
 			var lateral := vel.dot(right)
-			_ball.apply_central_impulse(-right * lateral * GRIP * _ball.mass)
+			var surface: float = track.grip if track and "grip" in track else 1.0
+			_ball.apply_central_impulse(-right * lateral * grip_stat * surface * _ball.mass)
 
 		# Resistencia del aire y del terreno.
-		var drag := DRAG * (0.85 if boost_time > 0.0 else 1.0)
+		var drag := drag_stat * (0.85 if boost_time > 0.0 else 1.0)
 		if track and track.has_method("is_on_grass") and track.is_on_grass(_ball.global_position):
 			drag += GRASS_DRAG
 		_ball.apply_central_force(-vel.slide(normal) * drag * _ball.mass)
@@ -287,7 +307,7 @@ func _physics_process(delta: float) -> void:
 
 func _build_ball() -> void:
 	_ball = RigidBody3D.new()
-	_ball.mass = 1.0
+	_ball.mass = mass_stat
 	_ball.gravity_scale = 1.8
 	_ball.lock_rotation = true
 	_ball.can_sleep = false
@@ -324,22 +344,12 @@ func _build_model() -> void:
 
 	_body = Node3D.new()
 	_model.add_child(_body)
-	_add_box(_body, Vector3(2.0, 0.55, 4.3), Vector3(0, 0.72, 0), body_color)            # carrocería
-	_add_box(_body, Vector3(1.7, 0.5, 2.0), Vector3(0, 1.22, 0.3), Color("1d3557"))      # ventanas
-	_add_box(_body, Vector3(1.75, 0.08, 1.9), Vector3(0, 1.5, 0.3), Color("f1faee"))     # techo
-	_add_box(_body, Vector3(2.0, 0.08, 0.5), Vector3(0, 1.25, 2.0), Color("f1faee"))     # alerón
-	_add_box(_body, Vector3(0.12, 0.4, 0.12), Vector3(-0.8, 1.0, 2.0), Color("222222"))
-	_add_box(_body, Vector3(0.12, 0.4, 0.12), Vector3(0.8, 1.0, 2.0), Color("222222"))
-	_add_box(_body, Vector3(1.8, 0.2, 0.15), Vector3(0, 0.6, -2.18), Color("ffd166"))    # defensa
-	# Número en el techo y en las puertas.
-	_add_number(Vector3(0, 1.56, 0.3), Vector3(-PI / 2.0, 0, 0), 0.007)
-	_add_number(Vector3(-1.02, 0.75, 0.1), Vector3(0, -PI / 2.0, 0), 0.005)
-	_add_number(Vector3(1.02, 0.75, 0.1), Vector3(0, PI / 2.0, 0), 0.005)
+	_build_body()
 
 	for x in [-1.0, 1.0]:
-		for z in [-1.35, 1.35]:
+		for z in [-1.4, 1.4]:
 			var pivot := Node3D.new()
-			pivot.position = Vector3(x, 0.42, z)
+			pivot.position = Vector3(x * shape.width, 0.42, z * shape.length)
 			_model.add_child(pivot)
 			var spinner := Node3D.new()
 			pivot.add_child(spinner)
@@ -379,6 +389,90 @@ func _update_model(delta: float, normal := Vector3.UP, steer := 0.0) -> void:
 		s.rotate_x(-speed * delta / 0.42)
 	var lean := -_steer_visual * clampf(absf(speed) / 25.0, 0.0, 1.0) * (0.12 if drifting else 0.06)
 	_body.rotation.z = lean
+
+
+## Carrocería estilo stock car: perfil lateral extruido (cofre largo,
+## parabrisas inclinado, cajuela corta), cabina oscura, alerón y franjas.
+func _build_body() -> void:
+	var L: float = shape.length
+	var W: float = shape.width
+	var R: float = shape.roof
+	var paint := StandardMaterial3D.new()
+	paint.albedo_color = body_color
+	paint.roughness = 0.35
+	paint.metallic = 0.25
+	var accent := Color.WHITE if body_color.get_luminance() < 0.6 else Color("1d3557")
+
+	var lower := [Vector2(-2.3, 0.3), Vector2(-2.3, 0.55), Vector2(-2.1, 0.7), Vector2(-0.9, 0.88),
+		Vector2(1.0, 0.95), Vector2(2.25, 0.98), Vector2(2.3, 0.75), Vector2(2.3, 0.3)]
+	_body.add_child(_extruded(_scale_profile(lower, L, 1.0), 1.0 * W, paint))
+
+	var glass := StandardMaterial3D.new()
+	glass.albedo_color = Color("16213e")
+	glass.roughness = 0.1
+	glass.metallic = 0.5
+	var cabin := [Vector2(-0.85, 0.88), Vector2(-0.1, 1.45 * R), Vector2(1.0, 1.48 * R), Vector2(1.55, 0.95)]
+	_body.add_child(_extruded(_scale_profile(cabin, L, 1.0), 0.8 * W, glass))
+
+	# Techo pintado, franjas laterales, defensa, faros y alerón.
+	_add_box(_body, Vector3(1.5 * W, 0.05, 1.0 * L), Vector3(0, 1.48 * R, 0.45 * L), body_color)
+	for side in [-1.0, 1.0]:
+		_add_box(_body, Vector3(0.02, 0.14, 4.2 * L), Vector3(side * (1.0 * W + 0.01), 0.5, 0.0), accent)
+	_add_box(_body, Vector3(1.6 * W, 0.18, 0.06), Vector3(0, 0.42, -2.31 * L), Color("111111"))
+	for side in [-1.0, 1.0]:
+		_add_box(_body, Vector3(0.4, 0.12, 0.05), Vector3(side * 0.65 * W, 0.58, -2.31 * L), Color("fff3b0"))
+		_add_box(_body, Vector3(0.4, 0.12, 0.05), Vector3(side * 0.65 * W, 0.72, 2.31 * L), Color("d00000"))
+	var sp: float = shape.spoiler
+	_add_box(_body, Vector3(1.9 * W, 0.06, 0.45), Vector3(0, 0.98 + 0.25 * sp, 2.1 * L), accent)
+	for side in [-1.0, 1.0]:
+		_add_box(_body, Vector3(0.08, 0.25 * sp, 0.08), Vector3(side * 0.7 * W, 0.98 + 0.125 * sp, 2.1 * L), Color("222222"))
+	if car_type == "toro":
+		_add_box(_body, Vector3(1.9 * W, 0.12, 0.12), Vector3(0, 0.48, -2.42 * L), Color("444444"))
+
+	# Número en el techo y en las puertas.
+	_add_number(Vector3(0, 1.52 * R, 0.45 * L), Vector3(-PI / 2.0, 0, 0), 0.006)
+	_add_number(Vector3(-1.0 * W - 0.02, 0.72, 0.1), Vector3(0, -PI / 2.0, 0), 0.005)
+	_add_number(Vector3(1.0 * W + 0.02, 0.72, 0.1), Vector3(0, PI / 2.0, 0), 0.005)
+
+
+func _scale_profile(points: Array, sz: float, sy: float) -> Array:
+	var out := []
+	for p in points:
+		out.append(Vector2(p.x * sz, p.y * sy))
+	return out
+
+
+## Extruye un perfil convexo (z, y) a lo ancho (x = ±half), con caras planas.
+func _extruded(profile: Array, half: float, mat: Material) -> MeshInstance3D:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_smooth_group(-1)
+	var n := profile.size()
+	for side in [-1.0, 1.0]:
+		for i in range(1, n - 1):
+			var a := Vector3(side * half, profile[0].y, profile[0].x)
+			var b := Vector3(side * half, profile[i].y, profile[i].x)
+			var c := Vector3(side * half, profile[i + 1].y, profile[i + 1].x)
+			if side > 0.0:
+				st.add_vertex(a); st.add_vertex(b); st.add_vertex(c)
+			else:
+				st.add_vertex(a); st.add_vertex(c); st.add_vertex(b)
+	for i in n:
+		var p0: Vector2 = profile[i]
+		var p1: Vector2 = profile[(i + 1) % n]
+		var a := Vector3(-half, p0.y, p0.x)
+		var b := Vector3(half, p0.y, p0.x)
+		var c := Vector3(half, p1.y, p1.x)
+		var d := Vector3(-half, p1.y, p1.x)
+		st.add_vertex(a); st.add_vertex(c); st.add_vertex(b)
+		st.add_vertex(a); st.add_vertex(d); st.add_vertex(c)
+	st.generate_normals()
+	var m := MeshInstance3D.new()
+	m.mesh = st.commit()
+	var mm: Material = mat.duplicate()
+	mm.cull_mode = BaseMaterial3D.CULL_DISABLED
+	m.material_override = mm
+	return m
 
 
 func _add_number(pos: Vector3, rot: Vector3, pixel: float) -> void:
@@ -453,9 +547,12 @@ func _build_effects() -> void:
 	grow.add_point(Vector2(0, 0.5))
 	grow.add_point(Vector2(1, 1.8))
 	_dust.scale_amount_curve = grow
+	var dust_color := Color(0.78, 0.6, 0.42)
+	if track and "theme" in track and track.theme.has("dust"):
+		dust_color = track.theme.dust
 	var fade := Gradient.new()
-	fade.set_color(0, Color(0.78, 0.6, 0.42, 0.45))
-	fade.set_color(1, Color(0.78, 0.6, 0.42, 0.0))
+	fade.set_color(0, Color(dust_color, 0.45))
+	fade.set_color(1, Color(dust_color, 0.0))
 	_dust.color_ramp = fade
 	_dust.position = Vector3(0, 0.25, 1.7)
 	_model.add_child(_dust)

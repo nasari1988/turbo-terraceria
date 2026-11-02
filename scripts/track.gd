@@ -13,6 +13,9 @@ const DIRT_DARK := Color("a8733f")
 const GRASS := Color("3f7a2e")
 const GRASS_IN := Color("4a8a38")
 
+var track_name := "Óvalo de Tierra"
+var has_shortcut := true
+var grip := 1.0
 var start_position := Vector3.ZERO
 var start_heading := -PI / 2.0       # mirando hacia +x
 
@@ -257,3 +260,28 @@ func _mat(color: Color) -> StandardMaterial3D:
 		m.albedo_color = color
 		_materials[key] = m
 	return _materials[key]
+
+
+# ------------------------------------------------ interfaz común de pistas
+
+func lookahead() -> float:
+	return 0.32
+
+
+func curve_radius_ahead(_angle: float, _meters := 35.0) -> float:
+	return 20.0
+
+
+func item_box_positions() -> Array:
+	var out := []
+	for angle in [-1.5, 0.9, 2.2]:
+		for lateral in [-4.0, 0.0, 4.0]:
+			out.append(centerline_point(angle, lateral) + Vector3(0, 1.1, 0))
+	for z in [-3.0, 0.0, 3.0]:
+		out.append(Vector3(-24.0, 1.1, z))
+	return out
+
+
+func environment_settings() -> Dictionary:
+	return {"sky_top": Color("4a90d9"), "sky_horizon": Color("bfe0ff"), "fog": 0.0,
+		"sun": Color.WHITE, "sun_energy": 0.9}

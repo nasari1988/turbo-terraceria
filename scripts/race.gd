@@ -11,6 +11,7 @@ enum State { MENU, COUNTDOWN, RACING, FINISHED }
 enum Mode { RACE, PRACTICE }
 
 const CarScript := preload("res://scripts/car.gd")
+const GameState := preload("res://scripts/game_state.gd")
 const AIDriver := preload("res://scripts/ai_driver.gd")
 
 ## Rivales (nombres y colores originales).
@@ -46,6 +47,8 @@ var lap_start_time := 0.0
 var last_lap := 0.0
 var best_lap := INF
 var wrong_way := false
+var last_unlocks: Array = []        # lo que se desbloqueó en esta carrera
+var points_gained := {}             # puntos de torneo de esta carrera
 
 var _drivers: Array = []
 var _rivals: Array = []
@@ -73,6 +76,8 @@ func start(new_mode: int, new_laps: int) -> void:
 			c.number = r.number
 			c.body_color = r.color
 			c.power = r.power * DIFFICULTIES[difficulty].power
+			var look: String = GameState.CAR_ORDER[(i + 1) % GameState.CAR_ORDER.size()]
+			c.apply_type(look, GameState.CARS[look], false)   # solo la forma
 			c.use_player_input = false
 			c.track = track
 			c.respawn_callback = respawn_on_track
@@ -195,12 +200,25 @@ func _on_player_lap() -> void:
 	lap_completed.emit(last_lap, is_best)
 	if mode == Mode.RACE and player.laps_done == laps - 1:
 		final_lap.emit()
+	if mode == Mode.PRACTICE and is_best:
+		GameState.record_race(GameState.track_id, 99, best_lap)
 
 
 func _on_player_finished() -> void:
 	# El jugador terminó: el piloto automático toma el volante.
 	player.use_player_input = false
 	_add_driver(player, 0.0)
+	last_unlocks = GameState.record_race(GameState.track_id, player_position(), best_lap)
+	points_gained = {}
+	if is_tournament():
+		var t: Dictionary = GameState.tournament
+		var order := standings()
+		for i in order.size():
+			var pts: int = GameState.POINTS[i] if i < GameState.POINTS.size() else 0
+			points_gained[order[i].display_name] = pts
+			t.points[order[i].display_name] = t.points.get(order[i].display_name, 0) + pts
+		if is_last_tournament_race() and tournament_standings()[0][0] == player.display_name:
+			last_unlocks.append_array(GameState.record_tournament_win())
 	_set_state(State.FINISHED)
 	player_finished.emit()
 
@@ -212,6 +230,25 @@ func _rubber_band() -> void:
 		var base: float = RIVALS[i].power * DIFFICULTIES[difficulty].power
 		var gap: float = r.race_progress - player.race_progress
 		r.power = base * clampf(1.0 - gap * 0.02, 0.94, DIFFICULTIES[difficulty].catch_up)
+
+
+# ---------------------------------------------------------------- torneo
+
+func is_tournament() -> bool:
+	return GameState.tournament.get("active", false)
+
+
+func is_last_tournament_race() -> bool:
+	return GameState.tournament.get("index", 0) >= GameState.TOURNAMENT_TRACKS.size() - 1
+
+
+## [[nombre, puntos], ...] de mayor a menor.
+func tournament_standings() -> Array:
+	var list := []
+	for name in GameState.tournament.get("points", {}):
+		list.append([name, GameState.tournament.points[name]])
+	list.sort_custom(func(a, b): return a[1] > b[1])
+	return list
 
 
 # ---------------------------------------------------------------- datos

@@ -32,13 +32,8 @@ func _ready() -> void:
 	_box_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	_box_material.albedo_color.a = 0.85
 
-	# Filas de 3 cajas: antes de la rampa, al salir de la curva derecha,
-	# en la recta de arriba y a mitad del atajo.
-	for angle in [-1.5, 0.9, 2.2]:
-		for lateral in [-4.0, 0.0, 4.0]:
-			_add_box(track.centerline_point(angle, lateral) + Vector3(0, 1.1, 0))
-	for z in [-3.0, 0.0, 3.0]:
-		_add_box(Vector3(-24.0, 1.1, z))
+	for pos in track.item_box_positions():
+		_add_box(pos)
 
 
 ## Se llama al empezar una carrera: limpia manchas y conecta los autos.
