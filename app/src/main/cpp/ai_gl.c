@@ -5,7 +5,12 @@
 #include <GLES3/gl3.h>
 #include <stdio.h>
 
-#include "ai_shaders.h"
+// Este archivo se compila una vez por modelo (ver ai_gl_v1.c).
+#ifndef AI_NAME
+#define AI_NAME(x) ai_##x
+#define AI_HEADER "ai_shaders.h"
+#endif
+#include AI_HEADER
 
 #define W 240
 #define H 160
@@ -80,7 +85,7 @@ static GLuint make_fbo(const GLuint* texs, int n) {
 	return f;
 }
 
-bool ai_init(void) {
+bool AI_NAME(init)(void) {
 	if (ready) return true;
 	GLint max_bufs = 0;
 	glGetIntegerv(GL_MAX_DRAW_BUFFERS, &max_bufs);
@@ -124,7 +129,7 @@ static void bind_inputs(GLuint prog, const GLuint* texs, int n) {
 	}
 }
 
-unsigned ai_run(unsigned in_tex) {
+unsigned AI_NAME(run)(unsigned in_tex) {
 	if (!ready) return 0;
 	glDisable(GL_SCISSOR_TEST);
 	glDisable(GL_BLEND);
@@ -176,7 +181,7 @@ unsigned ai_run(unsigned in_tex) {
 	return out_tex;
 }
 
-void ai_deinit(void) {
+void AI_NAME(deinit)(void) {
 	if (!ready) return;
 	for (int i = 0; i < NPASS; ++i) glDeleteProgram(progs[i]);
 	glDeleteProgram(shuffle_prog);

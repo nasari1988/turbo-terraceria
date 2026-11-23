@@ -2,12 +2,15 @@
 Imita a Real-ESRGAN (maestro). Diseñada para pasar 1:1 a shaders GLES3:
 16 canales = 4 texturas RGBA, convoluciones 3x3 con borde replicado, PReLU,
 pixel shuffle 4x y suma con la entrada agrandada (residuo)."""
+import os
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-CH = 16
-BODY = 6
+# v1: 16 canales. v2: 32 canales (más nítida; el Poco F7 tiene margen de sobra).
+CH = int(os.environ.get("AI_CH", 32))
+BODY = int(os.environ.get("AI_BODY", 6))
 SCALE = 4
 
 

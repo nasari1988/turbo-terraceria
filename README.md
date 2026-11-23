@@ -30,17 +30,18 @@ Se instala encima de la versión anterior sin borrar tus partidas.
 - **ROM de prueba propia:** `mode7demo.gba` (se descarga junto al APK en Releases). Cruceta: girar y avanzar; A: más rápido.
   Código en `tools/mode7demo/` (se compila con `build.sh`).
 
-## Fase 3 (actual): IA en tiempo real (v1)
+## Fase 3 (actual): IA en tiempo real
 
 - Red neuronal ligera entrenada para imitar a Real-ESRGAN en pixel art. Escala el cuadro 4x (960×640) en la GPU, cada cuadro.
 - Está activada por defecto: menú del juego > **Resolución** > "IA 4x". "Mostrar FPS" en el menú indica si va fluido.
-- Entrenada solo con escenas sintéticas originales (`tools/ai/synth.py`), sin material de juegos.
+- **v2 (por defecto):** red de 32 canales entrenada con pixel art de Kenney (CC0, dominio público, `tools/ai/make_dataset.py`)
+  más escenas sintéticas propias (`tools/ai/synth.py`). Error frente a Real-ESRGAN: 0.020 (v1: 0.029; solo agrandar: 0.032).
+- **v1 ligera:** 16 canales, por si la v2 no va a velocidad completa. Ninguna usa material de juegos comerciales.
 - `tools/ai/`: generador de escenas, red (`student.py`), entrenamiento (`train.py`), modelo (`student.pt`)
   y conversión a shaders GLES3 (`gen_shaders.py` → `app/src/main/cpp/ai_shaders.h`). Verificado: los shaders dan el mismo resultado que PyTorch (diferencia máx. 1/255).
 
 ## Siguientes pasos
 
-- IA v2: red más grande y más entrenamiento (más nítida, más cerca de Real-ESRGAN).
 - IA por capas (fondo y sprites por separado) y caché de tiles.
 - NPU Hexagon.
 - Launcher propio.

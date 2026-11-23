@@ -7,7 +7,8 @@
 #define GBA_W 240
 #define GBA_H 160
 #define GBA_AUDIO_RATE 48000
-#define GBA_SCALE_AI 100  // modo IA 4x
+#define GBA_SCALE_AI 100       // IA 4x (modelo v2)
+#define GBA_SCALE_AI_LITE 101  // IA 4x ligera (modelo v1)
 
 // Botones del GBA (bits)
 enum {

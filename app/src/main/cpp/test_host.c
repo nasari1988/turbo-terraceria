@@ -75,6 +75,7 @@ int main(int argc, char** argv) {
 	fclose(o);
 	gba_unload();
 	ai_deinit();
+	ai1_deinit();
 	video_deinit();
 	return 0;
 }

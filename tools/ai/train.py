@@ -22,8 +22,10 @@ for f in sorted(glob.glob(f"{data_dir}/hr/*.png")):
     lr = np.asarray(Image.open(f.replace("/hr/", "/lr/")).convert("RGB"), dtype=np.float32) / 255
     hr = np.asarray(Image.open(f).convert("RGB"), dtype=np.float32) / 255
     pairs.append((torch.from_numpy(lr).permute(2, 0, 1), torch.from_numpy(hr).permute(2, 0, 1)))
-val = pairs[-12:]
-train = pairs[:-12]
+random.seed(0)
+random.shuffle(pairs)
+val = pairs[:40]
+train = pairs[40:]
 print(len(train), "entrenamiento,", len(val), "validación")
 
 P, B = 40, 16
@@ -35,7 +37,7 @@ def batch():
     xs, ys = [], []
     for _ in range(B):
         lr, hr = random.choice(train)
-        y0, x0 = random.randrange(0, 160 - P), random.randrange(0, 240 - P)
+        y0, x0 = random.randrange(0, lr.shape[1] - P + 1), random.randrange(0, lr.shape[2] - P + 1)
         x = lr[:, y0:y0 + P, x0:x0 + P]
         y = hr[:, y0 * 4:(y0 + P) * 4, x0 * 4:(x0 + P) * 4]
         if random.random() < 0.5:

@@ -70,6 +70,7 @@ JNIEXPORT void JNICALL FN(stop)(JNIEnv* env, jclass cls) {
 	pthread_mutex_lock(&lock);
 	emu_alive = false;
 	ai_deinit();
+	ai1_deinit();
 	video_set_window(NULL);
 	if (current) ANativeWindow_release(current);
 	current = NULL;

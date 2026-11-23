@@ -22,7 +22,7 @@ set(USE_EPOXY OFF CACHE BOOL "" FORCE)
 set(BUILD_LTO OFF CACHE BOOL "" FORCE)
 add_subdirectory(${MGBA_DIR} mgba EXCLUDE_FROM_ALL)
 
-add_library(gbacore STATIC gba_core.c video_gl.c ai_gl.c)
+add_library(gbacore STATIC gba_core.c video_gl.c ai_gl.c ai_gl_v1.c)
 if(ANDROID)
 	target_link_libraries(gbacore PUBLIC mgba EGL GLESv3)
 else()

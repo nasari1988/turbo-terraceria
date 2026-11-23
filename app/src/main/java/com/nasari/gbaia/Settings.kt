@@ -4,11 +4,12 @@ import android.content.Context
 
 /** Ajustes guardados de la app. */
 object Settings {
-    /** Modo IA (coincide con GBA_SCALE_AI en el código nativo). */
+    /** Modos IA (coinciden con GBA_SCALE_AI y GBA_SCALE_AI_LITE en el código nativo). */
     const val AI = 100
+    const val AI_LITE = 101
 
     /** IA, original exacto (CPU) y resolución interna en la GPU. */
-    val SCALES = listOf(AI, 0, 2, 4, 6, 8)
+    val SCALES = listOf(AI, AI_LITE, 0, 2, 4, 6, 8)
 
     fun scale(context: Context): Int = prefs(context).getInt("escala", AI)
 
@@ -19,7 +20,8 @@ object Settings {
     fun setScale(context: Context, scale: Int) = prefs(context).edit().putInt("escala", scale).apply()
 
     fun scaleLabel(scale: Int): String = when (scale) {
-        AI -> "IA 4x (mejora de imagen)"
+        AI -> "IA 4x v2 (mejor calidad)"
+        AI_LITE -> "IA 4x ligera (v1)"
         0 -> "Original (exacto, CPU)"
         8 -> "8x · 1920×1280 (máxima)"
         else -> "${scale}x · ${240 * scale}×${160 * scale}"

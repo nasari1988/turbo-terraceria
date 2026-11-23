@@ -8,3 +8,8 @@ bool ai_init(void);
 unsigned ai_run(unsigned in_tex);
 // Libera todo (llamar antes de destruir el contexto).
 void ai_deinit(void);
+
+// Modelo ligero (v1)
+bool ai1_init(void);
+unsigned ai1_run(unsigned in_tex);
+void ai1_deinit(void);
