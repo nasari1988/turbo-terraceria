@@ -214,11 +214,19 @@ class EmulatorActivity : Activity() {
                     if (usesNpu(current)) npu?.let {
                         append(" · NPU %.1f ms (%s, espera %.1f ms)".format(it.ms, it.modelName.removePrefix("student_"), npuWaitMs))
                     }
+                    if (current == Settings.HYBRID) {
+                        val h = Native.hybridInfo()
+                        val modes = (0..5).filter { (h[1] shr it) and 1 != 0 }.joinToString("+")
+                        append("\n")
+                        append(if (h[0] > 0) "Mode 7 en ${h[0]}/160 líneas → 8x" else "sin Mode 7 → todo IA (GPU a 1x)")
+                        append(" · modos $modes · GPU ${h[2]}x")
+                    }
                     // Uso de procesador, GPU, NPU y RAM
                     append("\n")
                     append(usage.line(if (ai || usesNpu(current)) st[0] else -1f, if (usesNpu(current)) npu?.ms ?: -1f else -1f))
                 }
-                Diag.lastStats = detail.replace('\n', ' ')
+                // En pausa (menú abierto) se conserva lo último medido jugando
+                if (!paused && frames > 0) Diag.lastStats = detail.replace('\n', ' · ')
                 runOnUiThread { fpsView.text = detail }
                 frames = 0
                 fpsStart = now
@@ -356,6 +364,7 @@ class EmulatorActivity : Activity() {
                     mode = Native.getScale()
                     return "No se pudo activar el modo híbrido; queda 8x"
                 }
+                Native.hybridOptions(Settings.showMask(this), true)
                 mode = Settings.HYBRID
             } else {
                 Native.hybridSet(false)
@@ -442,6 +451,7 @@ class EmulatorActivity : Activity() {
             if (fastForward) "Velocidad normal" else "Avance rápido (3x)",
             if (controls.visibility == View.VISIBLE) "Ocultar controles" else "Mostrar controles",
             if (fpsView.visibility == View.VISIBLE) "Ocultar FPS" else "Mostrar FPS",
+            if (Settings.showMask(this)) "Ocultar zonas 8x (híbrido)" else "Ver zonas 8x (híbrido)",
             "Generar reporte",
             "Salir",
         )
@@ -464,10 +474,18 @@ class EmulatorActivity : Activity() {
                         Settings.setShowFps(this, show)
                     }
                     7 -> {
+                        val show = !Settings.showMask(this)
+                        Settings.setShowMask(this, show)
+                        onEmu {
+                            Native.hybridOptions(show, true)
+                            if (mode != Settings.HYBRID) "Solo se ve en el modo híbrido" else if (show) "Zonas 8x en rosa" else "Zonas 8x ocultas"
+                        }
+                    }
+                    8 -> {
                         keepPaused = true
                         showReport()
                     }
-                    8 -> finish()
+                    9 -> finish()
                 }
             }
             .setOnDismissListener {

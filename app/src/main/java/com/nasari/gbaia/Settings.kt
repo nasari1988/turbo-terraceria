@@ -13,10 +13,10 @@ object Settings {
     const val HYBRID = 120
 
     /** IA, original exacto (CPU) y resolución interna en la GPU. */
-    val SCALES = listOf(NPU, HYBRID, AI, AI_LITE, 0, 2, 4, 6, 8)
+    val SCALES = listOf(HYBRID, NPU, AI, AI_LITE, 0, 2, 4, 6, 8)
 
-    /** Por defecto IA en la NPU (si no se puede, el emulador cae solo a IA v2 en GPU). */
-    fun scale(context: Context): Int = prefs(context).getInt("escala", NPU)
+    /** Por defecto el híbrido automático (8x solo con Mode 7, IA en NPU en el resto). */
+    fun scale(context: Context): Int = prefs(context).getInt("escala", HYBRID)
 
     /** Modelos de NPU que ya fallaron en este celular: no se vuelven a probar (arranque rápido). */
     fun npuFailed(context: Context): Set<String> = prefs(context).getStringSet("npu_fallidos", emptySet())!!.toSet()
@@ -30,13 +30,18 @@ object Settings {
 
     fun setShowFps(context: Context, on: Boolean) = prefs(context).edit().putBoolean("fps", on).apply()
 
+    /** Híbrido: teñir de rosa las zonas que van a 8x (para revisar la máscara). */
+    fun showMask(context: Context): Boolean = prefs(context).getBoolean("mascara", false)
+
+    fun setShowMask(context: Context, on: Boolean) = prefs(context).edit().putBoolean("mascara", on).apply()
+
     fun setScale(context: Context, scale: Int) = prefs(context).edit().putInt("escala", scale).apply()
 
     fun scaleLabel(scale: Int): String = when (scale) {
         AI -> "IA 4x v2 (mejor calidad)"
         AI_LITE -> "IA 4x ligera (v1)"
-        NPU -> "IA 4x en NPU (recomendada)"
-        HYBRID -> "Híbrido: 8x en Mode 7 + IA en NPU"
+        NPU -> "IA 4x en NPU"
+        HYBRID -> "Híbrido: 8x en Mode 7 + IA en NPU (recomendada)"
         0 -> "Original (exacto, CPU)"
         8 -> "8x · 1920×1280 (máxima)"
         else -> "${scale}x · ${240 * scale}×${160 * scale}"

@@ -224,6 +224,25 @@ JNIEXPORT jboolean JNICALL FN(hybridSet)(JNIEnv* env, jclass cls, jboolean on) {
 	return hybrid_enable(gba_get_scale());
 }
 
+JNIEXPORT void JNICALL FN(hybridOptions)(JNIEnv* env, jclass cls, jboolean showMask, jboolean automatic) {
+	(void) env;
+	(void) cls;
+	video_make_current();
+	hybrid_set_options(showMask, automatic);
+}
+
+// [líneas con Mode 7, modos vistos (bits), escala actual del renderizador]
+JNIEXPORT jintArray JNICALL FN(hybridInfo)(JNIEnv* env, jclass cls) {
+	(void) cls;
+	jint v[3];
+	int a, b, c;
+	hybrid_info(&a, &b, &c);
+	v[0] = a; v[1] = b; v[2] = c;
+	jintArray r = (*env)->NewIntArray(env, 3);
+	(*env)->SetIntArrayRegion(env, r, 0, 3, v);
+	return r;
+}
+
 JNIEXPORT jboolean JNICALL FN(hybridCapture)(JNIEnv* env, jclass cls, jint slot, jobject frameBuf) {
 	(void) cls;
 	uint32_t* frame = (*env)->GetDirectBufferAddress(env, frameBuf);

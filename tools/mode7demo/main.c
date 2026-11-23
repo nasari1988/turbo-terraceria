@@ -16,6 +16,9 @@
 #define DMA1SAD REG32(0x40000BC)
 #define DMA1DAD REG32(0x40000C0)
 #define DMA1CNT REG32(0x40000C4)
+#define DMA2SAD REG32(0x40000C8)
+#define DMA2DAD REG32(0x40000CC)
+#define DMA2CNT REG32(0x40000D0)
 #define BG2_AFF ((volatile struct Affine*) 0x4000020)
 
 #define VRAM16 ((volatile uint16_t*) 0x6000000)
@@ -35,6 +38,12 @@ struct Affine {
 };
 
 static struct Affine table[2][160];
+
+#ifdef MIXTO
+// Variante de prueba: cambia de modo a mitad de pantalla, como muchos juegos comerciales.
+// Cielo en modo 0, suelo en modo 1 y una barra abajo otra vez en modo 0 (sin BG2).
+static uint16_t disp[161];
+#endif
 
 static void copy16(volatile uint16_t* dst, const void* src, int bytes) {
 	const uint16_t* s = src;
@@ -75,6 +84,13 @@ static void start_dma(const struct Affine* t) {
 	DMA1SAD = (uint32_t) &sky[1];
 	DMA1DAD = 0x5000000;
 	DMA1CNT = 1 | (2u << 21) | (1u << 25) | (2u << 28) | (1u << 31);
+#ifdef MIXTO
+	DMA2CNT = 0;
+	DISPCNT = disp[0];
+	DMA2SAD = (uint32_t) &disp[1];
+	DMA2DAD = 0x4000000;
+	DMA2CNT = 1 | (2u << 21) | (1u << 25) | (2u << 28) | (1u << 31);
+#endif
 }
 
 int main(void) {
@@ -97,6 +113,14 @@ int main(void) {
 	// Modo 1: BG0 normal + BG2 afín, sprites con mapeo 1D
 	DISPCNT = 1 | (1 << 6) | (1 << 8) | (1 << 10) | (1 << 12);
 
+#ifdef MIXTO
+	for (int y = 0; y < 161; ++y) {
+		uint16_t base = (1 << 6) | (1 << 8) | (1 << 12);
+		if (y >= 160 || y <= HORIZON) disp[y] = 0 | base;           // modo 0, sin BG2
+		else if (y >= 152) disp[y] = 0 | base;                     // barra de abajo
+		else disp[y] = 1 | base | (1 << 10);                       // modo 1 con BG2
+	}
+#endif
 	int32_t cx8 = (512 - 90) << 8;
 	int32_t cy8 = (512 + 26 * 8 + 12) << 8;  // en la recta, antes de la meta
 	int angle = 64;                          // mirando a la derecha por la recta

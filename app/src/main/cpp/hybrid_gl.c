@@ -10,6 +10,11 @@
 #include "gba_core.h"
 
 extern unsigned GBAVideoGLAffineMaskTex;  // definido en el parche de mGBA
+extern int GBAVideoGLAffineLines;         // líneas con capa afín en el último cuadro
+extern int GBAVideoGLModesSeen;           // modos de video vistos en el último cuadro (bits)
+static int no_affine_frames = 0;          // cuadros seguidos sin Mode 7
+static int show_mask = 0;
+static int auto_mode = 1;
 
 static bool ready = false;
 static int cur_scale = 0;
@@ -46,6 +51,7 @@ static const char* FS_MIX =
 	"uniform highp sampler2D hi;\n"
 	"uniform highp sampler2D mk;\n"
 	"uniform highp sampler2D ai;\n"
+	"uniform int show;\n"
 	"out vec4 color;\n"
 	"void main() {\n"
 	"  ivec2 p = ivec2(gl_FragCoord.xy);\n"
@@ -53,7 +59,9 @@ static const char* FS_MIX =
 	"  float m = texelFetch(mk, p, 0).r;\n"
 	"  vec3 a = texture(ai, uv).rgb;\n"
 	"  vec3 h = texelFetch(hi, p, 0).rgb;\n"
-	"  color = vec4(mix(a, h, m), 1.0);\n"
+	"  vec3 c = mix(a, h, m);\n"
+	"  if (show != 0) c = mix(c, vec3(1.0, 0.0, 0.3), m * 0.35);\n"
+	"  color = vec4(c, 1.0);\n"
 	"}\n";
 
 static GLuint program(const char* fs) {
@@ -101,6 +109,7 @@ static GLuint fbo_for(GLuint t) {
 
 void hybrid_disable(void) {
 	GBAVideoGLAffineMaskTex = 0;
+	no_affine_frames = 0;
 	if (!ready) return;
 	glDeleteTextures(1, &mask_live);
 	glDeleteTextures(2, hi);
@@ -166,10 +175,25 @@ bool hybrid_capture(int slot, uint32_t* frame) {
 	int w, h;
 	bool smooth;
 	gba_frame_texture(&out, &w, &h, &smooth);
-	if (!ready || w != GBA_W * cur_scale) return false;
-	blit(out, hi[slot], w, h);
-	blit(mask_live, mk[slot], w, h);
-
+	if (!ready || w < GBA_W) return false;
+	int s = w / GBA_W;  // escala actual del renderizador (8, o 1 si no hay Mode 7)
+	if (s == cur_scale) {
+		blit(out, hi[slot], w, h);
+		blit(mask_live, mk[slot], w, h);
+	} else {
+		// Sin Mode 7: la imagen sale a 1x y la máscara va vacía (todo con IA)
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, read_fbo);
+		glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, out, 0);
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, draw_fbo);
+		glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, hi[slot], 0);
+		glDisable(GL_SCISSOR_TEST);
+		glBlitFramebuffer(0, 0, w, h, 0, 0, GBA_W * cur_scale, GBA_H * cur_scale, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+		glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, mk[slot], 0);
+		glClearColor(0.f, 0.f, 0.f, 0.f);
+		glClear(GL_COLOR_BUFFER_BIT);
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+	}
 	state();
 	glBindFramebuffer(GL_FRAMEBUFFER, small_fbo);
 	glViewport(0, 0, GBA_W, GBA_H);
@@ -177,12 +201,21 @@ bool hybrid_capture(int slot, uint32_t* frame) {
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, out);
 	glUniform1i(glGetUniformLocation(prog_down, "hi"), 0);
-	glUniform1i(glGetUniformLocation(prog_down, "scale"), cur_scale);
+	glUniform1i(glGetUniformLocation(prog_down, "scale"), s);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 	glPixelStorei(GL_PACK_ALIGNMENT, 4);
 	glReadPixels(0, 0, GBA_W, GBA_H, GL_RGBA, GL_UNSIGNED_BYTE, frame);  // mismo orden RGBX que mGBA
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glBindVertexArray(0);
+	// Híbrido automático: 8x solo mientras el juego usa Mode 7; ~3 s sin él y el renderizador baja a 1x
+	if (auto_mode) {
+		if (GBAVideoGLAffineLines > 0) {
+			no_affine_frames = 0;
+			if (s != cur_scale) gba_set_scale(cur_scale);
+		} else if (++no_affine_frames >= 180 && s != 1) {
+			gba_set_scale(1);
+		}
+	}
 	return true;
 }
 
@@ -203,6 +236,7 @@ unsigned hybrid_mix(int slot, unsigned ai_tex) {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glUniform1i(glGetUniformLocation(prog_mix, "ai"), 2);
+	glUniform1i(glGetUniformLocation(prog_mix, "show"), show_mask);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 	glActiveTexture(GL_TEXTURE0);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -212,4 +246,16 @@ unsigned hybrid_mix(int slot, unsigned ai_tex) {
 
 int hybrid_scale(void) {
 	return ready ? cur_scale : 0;
+}
+
+void hybrid_set_options(bool show, bool automatic) {
+	show_mask = show;
+	auto_mode = automatic;
+	if (!automatic && ready) gba_set_scale(cur_scale);
+}
+
+void hybrid_info(int* lines, int* modes, int* scale_now) {
+	*lines = GBAVideoGLAffineLines;
+	*modes = GBAVideoGLModesSeen;
+	*scale_now = gba_get_scale();
 }

@@ -49,6 +49,10 @@ object Native {
     ): Boolean
     /** Modo híbrido: activa la máscara Mode 7 (requiere el renderizador de GPU, escala 8). */
     @JvmStatic external fun hybridSet(on: Boolean): Boolean
+    /** Modo híbrido: teñir las zonas 8x y bajar a 1x cuando el juego no usa Mode 7. */
+    @JvmStatic external fun hybridOptions(showMask: Boolean, automatic: Boolean)
+    /** Modo híbrido: [líneas con Mode 7, modos de video vistos (bits), escala actual]. */
+    @JvmStatic external fun hybridInfo(): IntArray
     /** Modo híbrido: guarda 8x + máscara en [slot] y deja el cuadro 1x en [frame]. */
     @JvmStatic external fun hybridCapture(slot: Int, frame: java.nio.ByteBuffer): Boolean
     /** Llena la entrada de la NPU desde un cuadro guardado (240x160 RGBX). */

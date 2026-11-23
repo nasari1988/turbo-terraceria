@@ -1,13 +1,22 @@
 diff --git a/src/gba/renderers/gl.c b/src/gba/renderers/gl.c
-index e4d6415..e279a87 100644
+index e4d6415..9747f90 100644
 --- a/src/gba/renderers/gl.c
 +++ b/src/gba/renderers/gl.c
-@@ -561,20 +561,27 @@ static const char* const _finalize =
+@@ -44,6 +44,8 @@ static void GBAVideoGLRendererDrawWindow(struct GBAVideoGLRenderer* renderer, in
+ static void _cleanRegister(struct GBAVideoGLRenderer* renderer, int address, uint16_t value);
+ static void _drawScanlines(struct GBAVideoGLRenderer* renderer, int lastY);
+ static void _finalizeLayers(struct GBAVideoGLRenderer* renderer);
++extern unsigned char GBAVideoGLAffineRows[];
++extern unsigned char GBAVideoGLModeRows[];
+ 
+ #define TEST_LAYER_ENABLED(X) !glRenderer->d.disableBG[X] && glRenderer->bg[X].enabled == 4
+ 
+@@ -561,20 +563,27 @@ static const char* const _finalize =
  	"uniform isampler2D window;\n"
  	"uniform sampler2D palette;\n"
  	"uniform isampler2D backdropFlags;\n"
 -	"out vec4 color;\n"
-+	"uniform int affineMask;\n"
++	"uniform int affineRows[20];\n"
 +	"OUT(0) out vec4 color;\n"
 +	"OUT(1) out vec4 affine;\n"
 +	"int topLayer = 5;\n"
@@ -32,7 +41,7 @@ index e4d6415..e279a87 100644
  	"	}\n"
  	"}\n"
  
-@@ -590,35 +597,35 @@ static const char* const _finalize =
+@@ -590,35 +599,35 @@ static const char* const _finalize =
  	"		vec4 pix = texelFetch(layers[4], coord, 0);\n"
  	"		if (pix.a != 0.) {\n"
  	"			ivec4 inflags = ivec4(texelFetch(objFlags, coord, 0));\n"
@@ -73,26 +82,50 @@ index e4d6415..e279a87 100644
  	"		}\n"
  	"	}\n"
  	"	if ((layerWindow & 32) == 0) {\n"
-@@ -635,6 +642,7 @@ static const char* const _finalize =
+@@ -635,6 +644,9 @@ static const char* const _finalize =
  	"		}\n"
  	"	}\n"
  	"	color = topPixel;\n"
++	"	int ly = clamp(int(texCoord.y), 0, 159);\n"
++	"	int affineMask = (affineRows[ly >> 3] >> ((ly & 7) * 4)) & 15;\n"
 +	"	affine = vec4(topLayer < 4 && ((affineMask >> topLayer) & 1) != 0 ? 1. : 0., 0., 0., 1.);\n"
  	"}";
  
  static const GLint _vertices[] = {
-@@ -1641,6 +1649,10 @@ static void GBAVideoGLRendererWriteBLDCNT(struct GBAVideoGLRenderer* renderer, u
+@@ -1333,6 +1345,15 @@ void GBAVideoGLRendererDrawScanline(struct GBAVideoRenderer* renderer, int y) {
+ 	}
+ 	glRenderer->regsDirty = 0;
+ 
++	{
++		// GBA IA: capas afines activas en esta línea (los juegos cambian de modo a mitad de pantalla)
++		int mode = GBARegisterDISPCNTGetMode(glRenderer->dispcnt);
++		int bgs = (glRenderer->dispcnt >> 8) & 0xF;
++		int aff = mode == 1 ? 4 : (mode == 2 ? 12 : 0);
++		GBAVideoGLAffineRows[y] = aff & bgs;
++		GBAVideoGLModeRows[y] = mode;
++	}
++
+ 	glRenderer->winNHistory[0][y * 4 + 0] = glRenderer->winN[0].h.start + glRenderer->winN[0].offsetX;
+ 	glRenderer->winNHistory[0][y * 4 + 1] = glRenderer->winN[0].h.end + glRenderer->winN[0].offsetX;
+ 	glRenderer->winNHistory[0][y * 4 + 2] = glRenderer->winN[0].v.start + glRenderer->winN[0].offsetY;
+@@ -1641,6 +1662,16 @@ static void GBAVideoGLRendererWriteBLDCNT(struct GBAVideoGLRenderer* renderer, u
  	renderer->target2Bd = GBARegisterBLDCNTGetTarget2Bd(value);
  }
  
 +// GBA IA (modo híbrido): si no es 0, el paso final también escribe aquí una máscara
 +// (R = 1 donde el píxel visible viene de una capa afín / Mode 7). Textura R8 del tamaño de la salida.
 +unsigned GBAVideoGLAffineMaskTex = 0;
++// Por línea (0..159): capas afines activas (bits BG0..BG3) y modo de video. Se llenan al dibujar.
++unsigned char GBAVideoGLAffineRows[GBA_VIDEO_VERTICAL_PIXELS];
++unsigned char GBAVideoGLModeRows[GBA_VIDEO_VERTICAL_PIXELS];
++// Resumen del último cuadro: líneas con capa afín y modos vistos (bit n = modo n)
++int GBAVideoGLAffineLines = 0;
++int GBAVideoGLModesSeen = 0;
 +
  void _finalizeLayers(struct GBAVideoGLRenderer* renderer) {
  	const GLuint* uniforms = renderer->finalizeShader.uniforms;
  	glBindFramebuffer(GL_FRAMEBUFFER, renderer->fbo[GBA_GL_FBO_OUTPUT]);
-@@ -1648,6 +1660,17 @@ void _finalizeLayers(struct GBAVideoGLRenderer* renderer) {
+@@ -1648,6 +1679,24 @@ void _finalizeLayers(struct GBAVideoGLRenderer* renderer) {
  		_initFramebufferTexture(renderer->outputTex, GL_RGB, GL_COLOR_ATTACHMENT0, renderer->scale);
  		renderer->outputTexDirty = false;
  	}
@@ -101,11 +134,18 @@ index e4d6415..e279a87 100644
 +		static const GLenum two[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
 +		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, GBAVideoGLAffineMaskTex, 0);
 +		glDrawBuffers(GBAVideoGLAffineMaskTex ? 2 : 1, GBAVideoGLAffineMaskTex ? two : one);
-+		// Capas afines según el modo: 1 = BG2, 2 = BG2 y BG3
-+		int mode = GBARegisterDISPCNTGetMode(renderer->dispcnt);
-+		int affineMask = mode == 1 ? 4 : (mode == 2 ? 12 : 0);
++		// Capas afines por línea: 4 bits por línea, 8 líneas por entero
++		GLint rows[20] = {0};
++		int lines = 0, modes = 0;
++		for (int y = 0; y < GBA_VIDEO_VERTICAL_PIXELS; ++y) {
++			rows[y >> 3] |= (GBAVideoGLAffineRows[y] & 15) << ((y & 7) * 4);
++			lines += GBAVideoGLAffineRows[y] != 0;
++			modes |= 1 << (GBAVideoGLModeRows[y] & 7);
++		}
++		GBAVideoGLAffineLines = lines;
++		GBAVideoGLModesSeen = modes;
 +		glUseProgram(renderer->finalizeShader.program);
-+		glUniform1i(glGetUniformLocation(renderer->finalizeShader.program, "affineMask"), affineMask);
++		glUniform1iv(glGetUniformLocation(renderer->finalizeShader.program, "affineRows"), 20, rows);
 +	}
  	glViewport(0, 0, GBA_VIDEO_HORIZONTAL_PIXELS * renderer->scale, GBA_VIDEO_VERTICAL_PIXELS * renderer->scale);
  	glScissor(0, 0, GBA_VIDEO_HORIZONTAL_PIXELS * renderer->scale, GBA_VIDEO_VERTICAL_PIXELS * renderer->scale);

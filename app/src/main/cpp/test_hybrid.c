@@ -42,8 +42,15 @@ int main(int argc, char** argv) {
 	static uint32_t frame[240 * 160];
 	int frames = atoi(argv[2]);
 	unsigned keys = strtoul(argv[3], NULL, 0);
-	for (int i = 0; i < frames; ++i) gba_run_frame(i > 5 ? keys : 0, audio, 4096);
+	for (int i = 0; i < frames; ++i) {
+		gba_run_frame(i > 5 ? keys : 0, audio, 4096);
+		// como en el celular: capturar cada cuadro (el híbrido automático decide la escala)
+		if (getenv("CADA_CUADRO") && i < frames - 1 && !hybrid_capture(i & 1, frame)) return 6;
+	}
 	if (!hybrid_capture(0, frame)) return 5;
+	int l, m, sc;
+	hybrid_info(&l, &m, &sc);
+	printf("líneas Mode 7 %d · modos 0x%x · escala ahora %d\n", l, m, sc);
 	char path[512];
 	unsigned out; int w, h; bool sm;
 	gba_frame_texture(&out, &w, &h, &sm);
