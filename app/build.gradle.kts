@@ -11,8 +11,8 @@ android {
         applicationId = "com.nasari.gbaia"
         minSdk = 31 // NPU (LiteRT + QNN) pide Android 12+; el Poco F7 trae Android 15
         targetSdk = 35
-        versionCode = 17
-        versionName = "0.17"
+        versionCode = 20
+        versionName = "0.20"
         ndk {
             abiFilters += "arm64-v8a" // Poco F7
         }

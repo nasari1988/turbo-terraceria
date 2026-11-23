@@ -26,6 +26,19 @@ import java.io.File
 import java.nio.IntBuffer
 
 class EmulatorActivity : Activity() {
+    companion object {
+        /** Ruta del juego en la biblioteca del launcher (para tiempo jugado y modo por juego). */
+        const val EXTRA_PATH = "ruta"
+        /** Estado a cargar al iniciar: "auto", "1", "2" o "3". */
+        const val EXTRA_STATE = "estado"
+
+        fun stateFile(c: android.content.Context, fileName: String, slot: String): File {
+            val dir = File(c.filesDir, "states").apply { mkdirs() }
+            val base = Roms.safeName(fileName)
+            return File(dir, if (slot == "auto") "$base.auto" else "$base.ss$slot")
+        }
+    }
+
     private lateinit var game: GameView
     private lateinit var controls: ControlsView
     private lateinit var fpsView: TextView
@@ -51,6 +64,12 @@ class EmulatorActivity : Activity() {
     private val tasks = java.util.concurrent.ConcurrentLinkedQueue<() -> Unit>()
 
     private lateinit var gameName: String
+    private lateinit var fileName: String
+    /** Clave del juego para el launcher (ruta del archivo o la URI). */
+    private lateinit var gameKey: String
+    @Volatile private var loaded = false
+    private var playStart = 0L
+    private var playMs = 0L
     private val saveDir by lazy { File(filesDir, "saves").apply { mkdirs() } }
     private val stateDir by lazy { File(filesDir, "states").apply { mkdirs() } }
 
@@ -112,7 +131,10 @@ class EmulatorActivity : Activity() {
     }
 
     private fun startGame(uri: Uri) {
-        gameName = Roms.safeName(Roms.displayName(this, uri))
+        fileName = Roms.displayName(this, uri)
+        gameName = Roms.safeName(fileName)
+        gameKey = intent.getStringExtra(EXTRA_PATH) ?: uri.path?.takeIf { uri.scheme == "file" } ?: uri.toString()
+        playStart = System.currentTimeMillis()
         Recents.add(this, uri, Roms.displayName(this, uri))
         running = true
         thread = Thread({ emulate(uri) }, "emulador").apply { start() }
@@ -132,6 +154,8 @@ class EmulatorActivity : Activity() {
         } finally {
             dropNpu()
             npuExec.shutdown()
+            // Guardado automático al salir (el launcher ofrece "Continuar")
+            if (loaded) Native.saveState(stateFile(this, fileName, "auto").absolutePath)
             Native.stop() // guarda la partida y libera la GPU
         }
     }
@@ -144,12 +168,17 @@ class EmulatorActivity : Activity() {
             return
         }
         val savePath = File(saveDir, "$gameName.sav").absolutePath
-        val wanted = if (gpu) Settings.scale(this) else 0
+        val wanted = if (gpu) GameDb.mode(this, gameKey) ?: Settings.scale(this) else 0
         if (!Native.load(rom, savePath, when (wanted) { Settings.NPU -> 0; Settings.HYBRID -> 8; else -> wanted })) {
             fail("Este archivo no es un juego de GBA válido")
             return
         }
+        loaded = true
         mode = Native.getScale()
+        intent.getStringExtra(EXTRA_STATE)?.let { slot ->
+            val ok = Native.loadState(stateFile(this, fileName, slot).absolutePath)
+            runOnUiThread { toast(if (!ok) "No se pudo cargar la partida" else if (slot == "auto") "Continuando donde te quedaste" else "Ranura $slot cargada") }
+        }
         if (usesNpu(wanted)) applyMode(wanted)?.let { msg -> runOnUiThread { toast(msg) } }
         Diag.log("modo inicial: ${Settings.scaleLabel(mode)}")
 
@@ -442,17 +471,17 @@ class EmulatorActivity : Activity() {
         if (isFinishing) return
         paused = true
         controls.clear()
-        val stateFile = File(stateDir, "$gameName.ss1").absolutePath
         val options = arrayOf(
             "Continuar",
             "Guardar estado",
             "Cargar estado",
-            "Resolución: " + Settings.scaleLabel(if (gpu) Settings.scale(this) else 0),
+            "Resolución: " + Settings.scaleLabel(if (gpu) (GameDb.mode(this, gameKey) ?: Settings.scale(this)) else 0),
             if (fastForward) "Velocidad normal" else "Avance rápido (3x)",
             if (controls.visibility == View.VISIBLE) "Ocultar controles" else "Mostrar controles",
             if (fpsView.visibility == View.VISIBLE) "Ocultar FPS" else "Mostrar FPS",
             if (Settings.showMask(this)) "Ocultar zonas 8x (híbrido)" else "Ver zonas 8x (híbrido)",
             "Generar reporte",
+            "Usar como fondo del juego",
             "Salir",
         )
         var keepPaused = false
@@ -460,8 +489,10 @@ class EmulatorActivity : Activity() {
             .setTitle(gameName)
             .setItems(options) { _, which ->
                 when (which) {
-                    1 -> onEmu { if (Native.saveState(stateFile)) "Estado guardado" else "No se pudo guardar" }
-                    2 -> onEmu { if (Native.loadState(stateFile)) "Estado cargado" else "No hay estado guardado" }
+                    1, 2 -> {
+                        keepPaused = true
+                        showSlots(save = which == 1)
+                    }
                     3 -> {
                         keepPaused = true
                         showScaleMenu()
@@ -485,7 +516,15 @@ class EmulatorActivity : Activity() {
                         keepPaused = true
                         showReport()
                     }
-                    9 -> finish()
+                    9 -> onEmu {
+                        // El cuadro actual, ampliado 4x sin suavizar, como fondo de este juego en el launcher
+                        val px = IntArray(Native.WIDTH * Native.HEIGHT)
+                        Native.copyPixels(px)
+                        val small = Bitmap.createBitmap(px, Native.WIDTH, Native.HEIGHT, Bitmap.Config.ARGB_8888)
+                        val big = Bitmap.createScaledBitmap(small, Native.WIDTH * 4, Native.HEIGHT * 4, false)
+                        if (Wallpapers.setBitmap(Wallpapers.gameFileFor(this, gameKey), big)) "Listo: es el fondo de este juego" else "No se pudo guardar el fondo"
+                    }
+                    10 -> finish()
                 }
             }
             .setOnDismissListener {
@@ -497,6 +536,29 @@ class EmulatorActivity : Activity() {
             .show()
     }
 
+    /** Ranuras de guardado 1–3 (y la automática para cargar). */
+    private fun showSlots(save: Boolean) {
+        val slots = if (save) listOf("1", "2", "3") else listOf("auto", "1", "2", "3")
+        val labels = slots.map { slot ->
+            val f = stateFile(this, fileName, slot)
+            (if (slot == "auto") "Automática" else "Ranura $slot") + " · " + if (f.exists()) GameDb.whenText(f.lastModified()) else "vacía"
+        }
+        AlertDialog.Builder(this)
+            .setTitle(if (save) "Guardar en…" else "Cargar…")
+            .setItems(labels.toTypedArray()) { _, w ->
+                val f = stateFile(this, fileName, slots[w]).absolutePath
+                onEmu {
+                    if (save) { if (Native.saveState(f)) "Guardado en ranura ${slots[w]}" else "No se pudo guardar" }
+                    else { if (Native.loadState(f)) "Partida cargada" else "Esa ranura está vacía" }
+                }
+            }
+            .setOnDismissListener {
+                paused = false
+                hideSystemBars()
+            }
+            .show()
+    }
+
     private fun showScaleMenu() {
         if (!gpu) {
             toast("Este celular no tiene GPU compatible (GLES3)")
@@ -504,12 +566,14 @@ class EmulatorActivity : Activity() {
             return
         }
         val values = Settings.SCALES
-        val current = values.indexOf(Settings.scale(this)).coerceAtLeast(0)
+        val own = GameDb.mode(this, gameKey)
+        val current = values.indexOf(own ?: Settings.scale(this)).coerceAtLeast(0)
         AlertDialog.Builder(this)
             .setTitle("Resolución")
             .setSingleChoiceItems(values.map { Settings.scaleLabel(it) }.toTypedArray(), current) { d, which ->
                 val s = values[which]
-                Settings.setScale(this, s)
+                // Si el juego tiene su propio modo, se cambia ese; si no, el de la app
+                if (own != null) GameDb.setMode(this, gameKey, s) else Settings.setScale(this, s)
                 onEmu { applyMode(s) }
                 d.dismiss()
             }
@@ -619,10 +683,13 @@ class EmulatorActivity : Activity() {
     override fun onPause() {
         super.onPause()
         paused = true
+        if (playStart > 0) playMs += System.currentTimeMillis() - playStart
+        playStart = 0
     }
 
     override fun onResume() {
         super.onResume()
+        playStart = System.currentTimeMillis()
         paused = false
         hideSystemBars()
     }
@@ -637,6 +704,12 @@ class EmulatorActivity : Activity() {
     override fun onDestroy() {
         running = false
         thread?.join(2000)
+        if (::gameKey.isInitialized) {
+            if (playStart > 0) playMs += System.currentTimeMillis() - playStart
+            GameDb.addPlayTime(this, gameKey, playMs)
+            playMs = 0
+            playStart = 0
+        }
         super.onDestroy()
     }
 }
