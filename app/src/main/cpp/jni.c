@@ -3,6 +3,7 @@
 #include <pthread.h>
 #include <time.h>
 
+#include "ai_gl.h"
 #include "gba_core.h"
 #include "video_gl.h"
 
@@ -68,6 +69,7 @@ JNIEXPORT void JNICALL FN(stop)(JNIEnv* env, jclass cls) {
 	gba_unload();
 	pthread_mutex_lock(&lock);
 	emu_alive = false;
+	ai_deinit();
 	video_set_window(NULL);
 	if (current) ANativeWindow_release(current);
 	current = NULL;
@@ -105,8 +107,9 @@ JNIEXPORT jint JNICALL FN(runFrame)(JNIEnv* env, jclass cls, jint keys, jshortAr
 	if (present) {
 		unsigned tex;
 		int w, h;
-		gba_frame_texture(&tex, &w, &h);
-		video_present(tex, w, h);
+		bool smooth;
+		gba_frame_texture(&tex, &w, &h, &smooth);
+		video_present(tex, w, h, smooth);
 	}
 	return n;
 }

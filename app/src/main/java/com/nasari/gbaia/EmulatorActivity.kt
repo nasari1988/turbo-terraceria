@@ -17,6 +17,9 @@ import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.view.WindowManager
 import android.widget.FrameLayout
+import android.widget.TextView
+import android.graphics.Color
+import android.view.Gravity
 import android.widget.Toast
 import java.io.File
 import java.nio.IntBuffer
@@ -24,6 +27,7 @@ import java.nio.IntBuffer
 class EmulatorActivity : Activity() {
     private lateinit var game: GameView
     private lateinit var controls: ControlsView
+    private lateinit var fpsView: TextView
 
     private var thread: Thread? = null
     @Volatile private var running = false
@@ -50,9 +54,19 @@ class EmulatorActivity : Activity() {
         game = GameView(this)
         controls = ControlsView(this)
         game.setOnTouchListener { _, _ -> showTouchControls(); false }
+        fpsView = TextView(this).apply {
+            setTextColor(Color.YELLOW)
+            setShadowLayer(4f, 0f, 0f, Color.BLACK)
+            textSize = 14f
+            visibility = if (Settings.showFps(context)) View.VISIBLE else View.GONE
+        }
         setContentView(FrameLayout(this).apply {
             addView(game)
             addView(controls)
+            addView(fpsView, FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            ))
         })
         hideSystemBars()
 
@@ -124,7 +138,17 @@ class EmulatorActivity : Activity() {
         track.play()
 
         var last = System.nanoTime()
+        var frames = 0
+        var fpsStart = System.nanoTime()
         while (running) {
+            val now = System.nanoTime()
+            if (now - fpsStart >= 1_000_000_000L) {
+                val fps = frames * 1e9 / (now - fpsStart)
+                val label = Settings.scaleLabel(Native.getScale())
+                runOnUiThread { fpsView.text = "%.1f FPS · %s".format(fps, label) }
+                frames = 0
+                fpsStart = now
+            }
             while (true) tasks.poll()?.invoke() ?: break
             if (paused) {
                 Native.idle()
@@ -138,12 +162,14 @@ class EmulatorActivity : Activity() {
                 Native.runFrame(keys, audio, false)
                 Native.runFrame(keys, audio, false)
                 Native.runFrame(keys, audio, gpu)
+                frames += 3
                 if (!gpu) drawFallback(bitmap, pixels, buffer)
                 val wait = 16_666_667L - (System.nanoTime() - last)
                 if (wait > 0) Thread.sleep(wait / 1_000_000, (wait % 1_000_000).toInt())
                 last = System.nanoTime()
             } else {
                 val n = Native.runFrame(keys, audio, gpu)
+                frames++
                 if (!gpu) drawFallback(bitmap, pixels, buffer)
                 // La escritura bloqueante del audio marca el ritmo (~59.7 cuadros/s)
                 if (n > 0) track.write(audio, 0, n * 2)
@@ -218,6 +244,7 @@ class EmulatorActivity : Activity() {
             "Resolución: " + Settings.scaleLabel(if (gpu) Settings.scale(this) else 0),
             if (fastForward) "Velocidad normal" else "Avance rápido (3x)",
             if (controls.visibility == View.VISIBLE) "Ocultar controles" else "Mostrar controles",
+            if (fpsView.visibility == View.VISIBLE) "Ocultar FPS" else "Mostrar FPS",
             "Salir",
         )
         var keepPaused = false
@@ -233,7 +260,12 @@ class EmulatorActivity : Activity() {
                     }
                     4 -> fastForward = !fastForward
                     5 -> controls.visibility = if (controls.visibility == View.VISIBLE) View.GONE else View.VISIBLE
-                    6 -> finish()
+                    6 -> {
+                        val show = fpsView.visibility != View.VISIBLE
+                        fpsView.visibility = if (show) View.VISIBLE else View.GONE
+                        Settings.setShowFps(this, show)
+                    }
+                    7 -> finish()
                 }
             }
             .setOnDismissListener {

@@ -2,6 +2,7 @@
 // Fase 1: emulación, audio, guardado y estados.
 // Fase 2: renderizador OpenGL de mGBA a alta resolución (1x-8x) en la GPU.
 #include "gba_core.h"
+#include "ai_gl.h"
 
 #include <fcntl.h>
 #include <stdarg.h>
@@ -21,6 +22,7 @@ static bool have_gl = false;
 static GLuint out_tex = 0;  // donde dibuja el renderizador OpenGL de mGBA
 static GLuint sw_tex = 0;   // copia del renderizador por software
 static int scale = 0;       // 0 = software (exacto), 1-8 = GPU
+static bool ai_on = false;  // IA 4x sobre el cuadro del renderizador por software
 
 // Sin registro: mGBA escribe mucho texto por cuadro y gasta CPU.
 static void quiet_log(struct mLogger* l, int category, enum mLogLevel level, const char* format, va_list args) {
@@ -51,7 +53,9 @@ bool gba_load(const void* rom, size_t size, const char* save_path, int video_sca
 	blip_set_rates(core->getAudioChannel(core, 0), core->frequency(core), GBA_AUDIO_RATE);
 	blip_set_rates(core->getAudioChannel(core, 1), core->frequency(core), GBA_AUDIO_RATE);
 
-	scale = have_gl ? video_scale : 0;
+	bool want_ai = video_scale == GBA_SCALE_AI;
+	ai_on = false;
+	scale = have_gl && !want_ai ? video_scale : 0;
 	if (scale < 0) scale = 0;
 	if (scale > 8) scale = 8;
 	if (have_gl) {
@@ -71,6 +75,7 @@ bool gba_load(const void* rom, size_t size, const char* save_path, int video_sca
 		if (sav) core->loadSave(core, sav);
 	}
 	core->reset(core);
+	if (want_ai) gba_set_scale(GBA_SCALE_AI);
 	return true;
 }
 
@@ -87,6 +92,13 @@ void gba_unload(void) {
 
 void gba_set_scale(int s) {
 	if (!core || !have_gl) return;
+	if (s == GBA_SCALE_AI) {
+		if (!ai_init()) return;  // sin soporte: se queda como está
+		gba_set_scale(0);         // la IA trabaja sobre el renderizador exacto
+		ai_on = true;
+		return;
+	}
+	ai_on = false;
 	if (s < 0) s = 0;
 	if (s > 8) s = 8;
 	if (s == scale) return;
@@ -106,7 +118,7 @@ void gba_set_scale(int s) {
 }
 
 int gba_get_scale(void) {
-	return scale;
+	return ai_on ? GBA_SCALE_AI : scale;
 }
 
 int gba_run_frame(uint32_t keys, int16_t* audio, int audio_cap) {
@@ -128,7 +140,8 @@ void gba_copy_pixels(uint32_t* pixels) {
 	for (int i = 0; i < GBA_W * GBA_H; ++i) pixels[i] = video[i] | 0xFF000000u;
 }
 
-void gba_frame_texture(unsigned* tex, int* w, int* h) {
+void gba_frame_texture(unsigned* tex, int* w, int* h, bool* smooth) {
+	*smooth = false;
 	if (scale > 0) {
 		*tex = out_tex;
 		*w = GBA_W * scale;
@@ -141,6 +154,9 @@ void gba_frame_texture(unsigned* tex, int* w, int* h) {
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, GBA_W, GBA_H, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		// sin mipmaps: si no se fija el filtro, GL considera la textura incompleta
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	}
 	glBindTexture(GL_TEXTURE_2D, sw_tex);
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
@@ -148,6 +164,15 @@ void gba_frame_texture(unsigned* tex, int* w, int* h) {
 	*tex = sw_tex;
 	*w = GBA_W;
 	*h = GBA_H;
+	if (ai_on) {
+		unsigned out = ai_run(sw_tex);
+		if (out) {
+			*tex = out;
+			*w = GBA_W * 4;
+			*h = GBA_H * 4;
+			*smooth = true;
+		}
+	}
 }
 
 bool gba_save_state(const char* path) {

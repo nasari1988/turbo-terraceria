@@ -36,7 +36,7 @@ class MainActivity : Activity() {
                 typeface = Typeface.DEFAULT_BOLD
             })
             addView(TextView(context).apply {
-                text = "Fase 2: alta resolución por GPU (hasta 8x). Cámbiala en el menú del juego. La IA llega en la fase 3."
+                text = "Fase 3: mejora de imagen con IA en la GPU (activada por defecto). Cámbiala en el menú del juego > Resolución."
                 setTextColor(Color.rgb(165, 180, 252))
                 setPadding(0, dp(4), 0, dp(16))
             })

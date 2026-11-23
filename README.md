@@ -21,7 +21,7 @@ Se instala encima de la versión anterior sin borrar tus partidas.
 - Abre `.gba` o `.zip`. Compatible con launchers (Daijishō, Pegasus) vía `ACTION_VIEW`.
 - Menú: botón **Atrás**, **Select + Start** o el botón central del control.
 
-## Fase 2 (actual): alta resolución por GPU
+## Fase 2: alta resolución por GPU
 
 - Renderizador OpenGL ES 3 de mGBA: el juego se dibuja internamente a 2x, 4x, 6x u 8x.
   Las capas rotadas/escaladas (Mode 7) y los sprites que giran se ven lisos en lugar de escalonados.
@@ -30,10 +30,20 @@ Se instala encima de la versión anterior sin borrar tus partidas.
 - **ROM de prueba propia:** `mode7demo.gba` (se descarga junto al APK en Releases). Cruceta: girar y avanzar; A: más rápido.
   Código en `tools/mode7demo/` (se compila con `build.sh`).
 
-## Siguientes fases
+## Fase 3 (actual): IA en tiempo real (v1)
 
-3. IA por capas con caché de tiles (GPU y luego NPU Hexagon).
-4. Launcher propio.
+- Red neuronal ligera entrenada para imitar a Real-ESRGAN en pixel art. Escala el cuadro 4x (960×640) en la GPU, cada cuadro.
+- Está activada por defecto: menú del juego > **Resolución** > "IA 4x". "Mostrar FPS" en el menú indica si va fluido.
+- Entrenada solo con escenas sintéticas originales (`tools/ai/synth.py`), sin material de juegos.
+- `tools/ai/`: generador de escenas, red (`student.py`), entrenamiento (`train.py`), modelo (`student.pt`)
+  y conversión a shaders GLES3 (`gen_shaders.py` → `app/src/main/cpp/ai_shaders.h`). Verificado: los shaders dan el mismo resultado que PyTorch (diferencia máx. 1/255).
+
+## Siguientes pasos
+
+- IA v2: red más grande y más entrenamiento (más nítida, más cerca de Real-ESRGAN).
+- IA por capas (fondo y sprites por separado) y caché de tiles.
+- NPU Hexagon.
+- Launcher propio.
 
 ## Estructura
 

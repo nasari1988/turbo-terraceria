@@ -112,7 +112,7 @@ bool video_set_window(void* native_window) {
 	return true;
 }
 
-void video_present(unsigned tex, int tex_w, int tex_h) {
+void video_present(unsigned tex, int tex_w, int tex_h, bool smooth) {
 	if (win == EGL_NO_SURFACE) return;
 	eglMakeCurrent(dpy, win, win, ctx);
 	EGLint ww = 0, wh = 0;
@@ -139,7 +139,7 @@ void video_present(unsigned tex, int tex_w, int tex_h) {
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, tex);
 	// nítido si la textura cabe entera; suave si hay que reducirla
-	GLint filter = (tex_w <= w && tex_h <= h) ? GL_NEAREST : GL_LINEAR;
+	GLint filter = (!smooth && tex_w <= w && tex_h <= h) ? GL_NEAREST : GL_LINEAR;
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
 	glUniform1i(loc_tex, 0);

@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "ai_gl.h"
 #include "gba_core.h"
 #include "video_gl.h"
 
@@ -50,7 +51,8 @@ int main(int argc, char** argv) {
 	uint32_t* px;
 	if (scale >= 0) {
 		unsigned tex;
-		gba_frame_texture(&tex, &w, &h);
+		bool smooth;
+		gba_frame_texture(&tex, &w, &h, &smooth);
 		px = malloc(w * h * 4);
 		GLuint fbo;
 		glGenFramebuffers(1, &fbo);
@@ -72,6 +74,7 @@ int main(int argc, char** argv) {
 	}
 	fclose(o);
 	gba_unload();
+	ai_deinit();
 	video_deinit();
 	return 0;
 }
