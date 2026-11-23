@@ -254,17 +254,21 @@ class EmulatorActivity : Activity() {
     /** Cambia el modo de imagen (hilo del emulador). Devuelve un mensaje para mostrar. */
     private fun applyMode(s: Int): String? {
         if (s == Settings.NPU) {
-            val up = npu ?: try {
+            val up = npu ?: run {
+                val notes = mutableListOf<String>()
                 val t0 = System.nanoTime()
-                NpuUpscaler.create(this).also {
-                    npu = it
-                    Diag.npuStatus = "lista (QNN HTP) · preparar %.0f ms".format((System.nanoTime() - t0) / 1e6)
-                    Diag.log("NPU lista")
+                val created = try {
+                    NpuUpscaler.create(this, notes)
+                } catch (e: Throwable) {
+                    notes += "error inesperado: ${e.javaClass.simpleName}: ${e.message}"
+                    null
                 }
-            } catch (e: Throwable) {
-                Diag.npuStatus = "no se pudo crear: ${e.javaClass.simpleName}: ${e.message}"
-                Diag.log("NPU no disponible: ${e.javaClass.simpleName}: ${e.message}")
-                null
+                notes.forEach { Diag.log("NPU · $it") }
+                Diag.npuStatus = if (created != null)
+                    "lista con ${created.modelName} (QNN HTP) · preparar %.0f ms".format((System.nanoTime() - t0) / 1e6)
+                else "no se pudo usar (ver registro)"
+                npu = created
+                created
             }
             if (up == null) {
                 Native.setScale(Settings.AI)

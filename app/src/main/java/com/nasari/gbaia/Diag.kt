@@ -21,6 +21,19 @@ object Diag {
         while (log.size > 80) log.removeFirst()
     }
 
+    /** Líneas del logcat de esta app relacionadas con la NPU (una app puede leer su propio log). */
+    private fun ownLogcat(): List<String> = try {
+        val p = ProcessBuilder("logcat", "-d", "-v", "brief", "--pid=" + android.os.Process.myPid())
+            .redirectErrorStream(true).start()
+        val lines = p.inputStream.bufferedReader().readLines()
+        p.waitFor()
+        val keys = listOf("qnn", "htp", "tflite", "delegate", "dsp", "rpc", "skel", "litert", "hexagon")
+        lines.filter { l -> keys.any { l.contains(it, ignoreCase = true) } }.takeLast(60)
+            .ifEmpty { listOf("(sin líneas relevantes)") }
+    } catch (e: Throwable) {
+        listOf("no se pudo leer logcat: ${e.message}")
+    }
+
     @Synchronized
     fun report(context: Context, game: String?, mode: String): String {
         val pkg = context.packageManager.getPackageInfo(context.packageName, 0)
@@ -36,6 +49,8 @@ object Diag {
             appendLine("Rendimiento: $lastStats")
             appendLine("--- Registro ---")
             log.forEach { appendLine(it) }
+            appendLine("--- Logcat (NPU/QNN) ---")
+            ownLogcat().forEach { appendLine(it) }
         }
     }
 }

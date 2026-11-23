@@ -17,6 +17,7 @@ import java.nio.channels.FileChannel
 class NpuUpscaler private constructor(
     private val interpreter: Interpreter,
     private val delegate: QnnDelegate,
+    val modelName: String,
 ) {
     val input: ByteBuffer = ByteBuffer.allocateDirect(160 * 240 * 3 * 4).order(ByteOrder.nativeOrder())
     val output: ByteBuffer = ByteBuffer.allocateDirect(160 * 240 * 48 * 4).order(ByteOrder.nativeOrder())
@@ -40,25 +41,71 @@ class NpuUpscaler private constructor(
     }
 
     companion object {
-        /** Devuelve el upscaler o lanza una excepción con la causa (para el reporte). */
-        fun create(context: Context): NpuUpscaler {
-            val options = QnnDelegate.Options().apply {
-                setBackendType(QnnDelegate.Options.BackendType.HTP_BACKEND)
+        private fun options(context: Context, backend: QnnDelegate.Options.BackendType, token: String) =
+            QnnDelegate.Options().apply {
+                setBackendType(backend)
                 setSkelLibraryDir(context.applicationInfo.nativeLibraryDir)
+                setLogLevel(QnnDelegate.Options.LogLevel.LOG_LEVEL_INFO)
+                setCacheDir(context.cacheDir.absolutePath)
+                setModelToken(token)
+                if (backend == QnnDelegate.Options.BackendType.HTP_BACKEND) {
+                    setHtpPrecision(QnnDelegate.Options.HtpPrecision.HTP_PRECISION_FP16)
+                    setHtpPerformanceMode(QnnDelegate.Options.HtpPerformanceMode.PERFORMANCE_BURST)
+                }
             }
-            val delegate = QnnDelegate(options)
-            val opts = Interpreter.Options().addDelegate(delegate)
-            val interpreter = try {
-                Interpreter(loadModel(context), opts)
+
+        /** Intenta crear un intérprete con el delegado. Devuelve null y anota la causa si falla. */
+        private fun attempt(
+            context: Context, model: String, backend: QnnDelegate.Options.BackendType, notes: MutableList<String>,
+        ): Pair<Interpreter, QnnDelegate>? {
+            val label = "$model en ${backend.name}"
+            var delegate: QnnDelegate? = null
+            return try {
+                val t0 = System.nanoTime()
+                delegate = QnnDelegate(options(context, backend, model))
+                val itp = Interpreter(loadModel(context, model), Interpreter.Options().addDelegate(delegate))
+                notes += "OK $label (%.0f ms)".format((System.nanoTime() - t0) / 1e6)
+                itp to delegate
             } catch (e: Throwable) {
-                delegate.close()
-                throw e
+                delegate?.close()
+                notes += "FALLA $label: ${e.javaClass.simpleName}: ${e.message?.lineSequence()?.firstOrNull()}"
+                null
             }
-            return NpuUpscaler(interpreter, delegate)
         }
 
-        private fun loadModel(context: Context): MappedByteBuffer {
-            val fd = context.assets.openFd("student_v2.tflite")
+        /**
+         * Diagnóstico + creación. Prueba, en orden: un modelo mínimo (¿la NPU responde?),
+         * la v2 con MIRROR_PAD y la v2 con relleno de ceros. Usa la primera v2 que funcione.
+         */
+        fun create(context: Context, notes: MutableList<String>): NpuUpscaler? {
+            try {
+                notes += "QNN delegado v" + QnnDelegate.getVersion().joinToString(".")
+                for (cap in listOf(
+                    QnnDelegate.Capability.HTP_RUNTIME_FP16, QnnDelegate.Capability.HTP_RUNTIME_QUANTIZED,
+                    QnnDelegate.Capability.GPU_RUNTIME, QnnDelegate.Capability.DSP_RUNTIME,
+                )) {
+                    notes += "capacidad ${cap.name}: ${if (QnnDelegate.checkCapability(cap)) "sí" else "no"}"
+                }
+            } catch (e: Throwable) {
+                notes += "no se pudo consultar capacidades: ${e.javaClass.simpleName}: ${e.message}"
+            }
+            val htp = QnnDelegate.Options.BackendType.HTP_BACKEND
+            val probe = attempt(context, "probe_conv", htp, notes)
+            probe?.let { (i, d) -> i.close(); d.close() }
+            if (probe == null) {
+                // ¿Funciona el delegado aunque sea en otro backend?
+                attempt(context, "probe_conv", QnnDelegate.Options.BackendType.GPU_BACKEND, notes)
+                    ?.let { (i, d) -> i.close(); d.close() }
+            }
+            for (model in listOf("student_v2", "student_v2_zp")) {
+                val ok = attempt(context, model, htp, notes) ?: continue
+                return NpuUpscaler(ok.first, ok.second, model)
+            }
+            return null
+        }
+
+        private fun loadModel(context: Context, name: String): MappedByteBuffer {
+            val fd = context.assets.openFd("$name.tflite")
             FileInputStream(fd.fileDescriptor).use { s ->
                 return s.channel.map(FileChannel.MapMode.READ_ONLY, fd.startOffset, fd.declaredLength)
             }
