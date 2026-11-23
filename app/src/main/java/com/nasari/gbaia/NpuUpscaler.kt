@@ -2,6 +2,7 @@ package com.nasari.gbaia
 
 import android.content.Context
 import com.qualcomm.qti.QnnDelegate
+import org.tensorflow.lite.DataType
 import org.tensorflow.lite.Interpreter
 import java.io.FileInputStream
 import java.nio.ByteBuffer
@@ -11,16 +12,37 @@ import java.nio.channels.FileChannel
 
 /**
  * IA v2 en la NPU Hexagon (LiteRT + delegado QNN de Qualcomm, backend HTP).
- * Calcula los 48 canales antes del pixel shuffle; el resto lo hace la GPU (npu_gl.c).
- * Crear y usar solo desde el hilo del emulador.
+ * El HTP del Poco F7 (SM8735) no acepta fp16: se usa el modelo cuantizado
+ * (pesos int8, activaciones int16). Calcula los 48 canales antes del pixel shuffle;
+ * el resto lo hace la GPU (npu_gl.c). Crear y usar solo desde el hilo del emulador.
  */
 class NpuUpscaler private constructor(
     private val interpreter: Interpreter,
     private val delegate: QnnDelegate,
     val modelName: String,
 ) {
-    val input: ByteBuffer = ByteBuffer.allocateDirect(160 * 240 * 3 * 4).order(ByteOrder.nativeOrder())
-    val output: ByteBuffer = ByteBuffer.allocateDirect(160 * 240 * 48 * 4).order(ByteOrder.nativeOrder())
+    // Tipo y cuantización de la entrada/salida (NPU_F32 = 0, NPU_I8 = 1, NPU_I16 = 2 en npu_gl.h)
+    val inType: Int
+    val inScale: Float
+    val inZero: Int
+    val outType: Int
+    val outScale: Float
+    val outZero: Int
+    val input: ByteBuffer
+    val output: ByteBuffer
+
+    init {
+        val i = interpreter.getInputTensor(0)
+        val o = interpreter.getOutputTensor(0)
+        inType = typeCode(i.dataType())
+        outType = typeCode(o.dataType())
+        inScale = i.quantizationParams().scale
+        inZero = i.quantizationParams().zeroPoint
+        outScale = o.quantizationParams().scale
+        outZero = o.quantizationParams().zeroPoint
+        input = ByteBuffer.allocateDirect(i.numBytes()).order(ByteOrder.nativeOrder())
+        output = ByteBuffer.allocateDirect(o.numBytes()).order(ByteOrder.nativeOrder())
+    }
 
     /** Promedio de ms por inferencia. */
     var ms = -1f
@@ -41,64 +63,70 @@ class NpuUpscaler private constructor(
     }
 
     companion object {
-        private fun options(context: Context, backend: QnnDelegate.Options.BackendType, token: String) =
+        /** Más lento que esto por inferencia = no se aceleró (corre en CPU). */
+        private const val MAX_MS = 25f
+
+        private fun typeCode(t: DataType) = when (t) {
+            DataType.INT8 -> 1
+            DataType.INT16 -> 2
+            else -> 0
+        }
+
+        private fun options(context: Context, token: String) =
             QnnDelegate.Options().apply {
-                setBackendType(backend)
+                setBackendType(QnnDelegate.Options.BackendType.HTP_BACKEND)
                 setSkelLibraryDir(context.applicationInfo.nativeLibraryDir)
-                setLogLevel(QnnDelegate.Options.LogLevel.LOG_LEVEL_INFO)
+                setLogLevel(QnnDelegate.Options.LogLevel.LOG_LEVEL_WARN)
                 setCacheDir(context.cacheDir.absolutePath)
                 setModelToken(token)
-                if (backend == QnnDelegate.Options.BackendType.HTP_BACKEND) {
-                    setHtpPrecision(QnnDelegate.Options.HtpPrecision.HTP_PRECISION_FP16)
-                }
+                setHtpPrecision(QnnDelegate.Options.HtpPrecision.HTP_PRECISION_QUANTIZED)
             }
 
-        /** Intenta crear un intérprete con el delegado. Devuelve null y anota la causa si falla. */
-        private fun attempt(
-            context: Context, model: String, backend: QnnDelegate.Options.BackendType, notes: MutableList<String>,
-        ): Pair<Interpreter, QnnDelegate>? {
-            val label = "$model en ${backend.name}"
+        /** Crea el intérprete, lo prueba y solo lo acepta si de verdad va rápido. */
+        private fun attempt(context: Context, model: String, notes: MutableList<String>): NpuUpscaler? {
             var delegate: QnnDelegate? = null
+            var up: NpuUpscaler? = null
             return try {
                 val t0 = System.nanoTime()
-                delegate = QnnDelegate(options(context, backend, model))
+                delegate = QnnDelegate(options(context, model))
                 val itp = Interpreter(loadModel(context, model), Interpreter.Options().addDelegate(delegate))
-                notes += "OK $label (%.0f ms)".format((System.nanoTime() - t0) / 1e6)
-                itp to delegate
+                val u = NpuUpscaler(itp, delegate, model)
+                up = u
+                val prep = (System.nanoTime() - t0) / 1e6
+                repeat(4) { u.run() } // calentamiento + medición
+                if (u.ms > MAX_MS) {
+                    notes += "NO SIRVE $model: %.1f ms por cuadro (no se aceleró, corre en CPU)".format(u.ms)
+                    u.close()
+                    null
+                } else {
+                    notes += "OK $model: preparar %.0f ms, %.1f ms por cuadro".format(prep, u.ms)
+                    u
+                }
             } catch (e: Throwable) {
-                delegate?.close()
-                notes += "FALLA $label: ${e.javaClass.simpleName}: ${e.message?.lineSequence()?.firstOrNull()}"
+                if (up != null) up.close() else delegate?.close()
+                notes += "FALLA $model: ${e.javaClass.simpleName}: ${e.message?.lineSequence()?.firstOrNull()}"
                 null
             }
         }
 
-        /**
-         * Diagnóstico + creación. Prueba, en orden: un modelo mínimo (¿la NPU responde?),
-         * la v2 con MIRROR_PAD y la v2 con relleno de ceros. Usa la primera v2 que funcione.
-         */
+        /** Prueba en orden: int16 (más precisa), int8 (más rápida), float (solo si la NPU acepta fp16). */
         fun create(context: Context, notes: MutableList<String>): NpuUpscaler? {
-            val htp = QnnDelegate.Options.BackendType.HTP_BACKEND
-            val probe = attempt(context, "probe_conv", htp, notes)
-            try {
-                notes += "QNN delegado v" + QnnDelegate.getVersion().joinToString(".")
-                for (cap in listOf(
-                    QnnDelegate.Capability.HTP_RUNTIME_FP16, QnnDelegate.Capability.HTP_RUNTIME_QUANTIZED,
-                    QnnDelegate.Capability.GPU_RUNTIME, QnnDelegate.Capability.DSP_RUNTIME,
-                )) {
-                    notes += "capacidad ${cap.name}: ${if (QnnDelegate.checkCapability(cap)) "sí" else "no"}"
+            var first = true
+            for (model in listOf("student_v2_a16w8", "student_v2_a8w8", "student_v2")) {
+                val up = attempt(context, model, notes)
+                if (first) {
+                    first = false
+                    // Tras el primer intento la librería ya está cargada: anotar capacidades
+                    try {
+                        notes += "QNN delegado v" + QnnDelegate.getVersion().joinToString(".")
+                        for (cap in listOf(QnnDelegate.Capability.HTP_RUNTIME_FP16, QnnDelegate.Capability.HTP_RUNTIME_QUANTIZED)) {
+                            notes += "capacidad ${cap.name}: ${if (QnnDelegate.checkCapability(cap)) "sí" else "no"}"
+                        }
+                    } catch (e: Throwable) {
+                        notes += "no se pudo consultar capacidades: ${e.message}"
+                    }
                 }
-            } catch (e: Throwable) {
-                notes += "no se pudo consultar capacidades: ${e.javaClass.simpleName}: ${e.message}"
-            }
-            probe?.let { (i, d) -> i.close(); d.close() }
-            if (probe == null) {
-                // ¿Funciona el delegado aunque sea en otro backend?
-                attempt(context, "probe_conv", QnnDelegate.Options.BackendType.GPU_BACKEND, notes)
-                    ?.let { (i, d) -> i.close(); d.close() }
-            }
-            for (model in listOf("student_v2", "student_v2_zp")) {
-                val ok = attempt(context, model, htp, notes) ?: continue
-                return NpuUpscaler(ok.first, ok.second, model)
+                if (up != null) return up
             }
             return null
         }
