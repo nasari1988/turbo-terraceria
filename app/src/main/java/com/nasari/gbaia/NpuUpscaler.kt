@@ -77,6 +77,8 @@ class NpuUpscaler private constructor(
          * la v2 con MIRROR_PAD y la v2 con relleno de ceros. Usa la primera v2 que funcione.
          */
         fun create(context: Context, notes: MutableList<String>): NpuUpscaler? {
+            val htp = QnnDelegate.Options.BackendType.HTP_BACKEND
+            val probe = attempt(context, "probe_conv", htp, notes)
             try {
                 notes += "QNN delegado v" + QnnDelegate.getVersion().joinToString(".")
                 for (cap in listOf(
@@ -88,8 +90,6 @@ class NpuUpscaler private constructor(
             } catch (e: Throwable) {
                 notes += "no se pudo consultar capacidades: ${e.javaClass.simpleName}: ${e.message}"
             }
-            val htp = QnnDelegate.Options.BackendType.HTP_BACKEND
-            val probe = attempt(context, "probe_conv", htp, notes)
             probe?.let { (i, d) -> i.close(); d.close() }
             if (probe == null) {
                 // ¿Funciona el delegado aunque sea en otro backend?

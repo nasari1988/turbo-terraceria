@@ -11,6 +11,10 @@
         android:label="GBA IA"
         android:theme="@android:style/Theme.Material.NoActionBar">
 
+        <!-- Librerías del fabricante que la NPU necesita (Android 12+ exige declararlas) -->
+        <uses-native-library android:name="libcdsprpc.so" android:required="false" />
+        <uses-native-library android:name="libOpenCL.so" android:required="false" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true">
