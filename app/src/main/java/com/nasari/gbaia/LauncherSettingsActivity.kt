@@ -190,10 +190,16 @@ class LauncherSettingsActivity : PickActivity() {
 
     private fun padSection() {
         body.addView(Ui.label(this, "Controles conectados"))
-        val pads = InputDevice.getDeviceIds().mapNotNull { InputDevice.getDevice(it) }
-            .filter { (it.sources and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD || (it.sources and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK }
+        val pads = ArrayList<String>()
+        for (id in InputDevice.getDeviceIds()) {
+            val dev: InputDevice = InputDevice.getDevice(id) ?: continue
+            val src: Int = dev.sources
+            val isPad = (src and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD ||
+                (src and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK
+            if (isPad) pads.add(dev.name)
+        }
         if (pads.isEmpty()) gap(Ui.row(this, "Ninguno", "Conéctalo por Bluetooth en los ajustes del celular y vuelve aquí", null), 0)
-        else pads.forEach { gap(Ui.row(this, it.name, "Listo para usar", null), 0) }
+        for (name in pads) gap(Ui.row(this, name, "Listo para usar", null), 0)
         body.addView(Ui.label(this, "Botones en el launcher").apply { setPadding(0, dp(18), 0, dp(4)) })
         for ((k, v) in listOf(
             "Cruceta ◀ ▶" to "Cambiar consola o juego", "A" to "Entrar / jugar", "B" to "Volver",
