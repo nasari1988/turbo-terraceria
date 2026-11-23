@@ -1,0 +1,70 @@
+name: Compilar GBA IA
+
+on:
+  push:
+    branches: [gba-ia]
+  workflow_dispatch: # botón "Run workflow" en la pestaña Actions
+
+permissions:
+  contents: write # para publicar el APK en Releases
+
+env:
+  MGBA_VERSION: "0.10.5"
+  GRADLE_VERSION: "8.10.2"
+
+jobs:
+  apk:
+    name: APK (arm64)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v5
+
+      - name: Instalar Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Descargar mGBA ${{ env.MGBA_VERSION }}
+        run: ./scripts/get-mgba.sh "$MGBA_VERSION"
+
+      - name: Instalar Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: ${{ env.GRADLE_VERSION }}
+
+      - name: Compilar APK
+        run: |
+          set -o pipefail
+          gradle --no-daemon assembleRelease 2>&1 | tee build.log
+          mkdir -p out
+          cp app/build/outputs/apk/release/app-release.apk out/gba-ia.apk
+
+      - name: Subir APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: gba-ia-apk
+          path: out/gba-ia.apk
+
+      - name: Publicar en Releases (enlace fijo de descarga)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release delete gba-ia-ultima --yes --cleanup-tag || true
+          gh release create gba-ia-ultima out/gba-ia.apk \
+            --title "GBA IA - última versión" \
+            --notes "APK generado automáticamente del commit ${GITHUB_SHA::7} (rama gba-ia)." \
+            --prerelease --target "$GITHUB_SHA"
+
+      - name: Publicar registro del error
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          { echo "Falló el commit ${GITHUB_SHA::7}"; echo; echo '```'; grep -E "error|Error|FAILED|What went wrong" -A3 build.log | tail -120; echo; tail -60 build.log; echo '```'; } > notas.md || echo "sin build.log" > notas.md
+          gh release delete gba-ia-registro --yes --cleanup-tag || true
+          gh release create gba-ia-registro --title "GBA IA - registro del último error" \
+            --notes-file notas.md --prerelease --target "$GITHUB_SHA"

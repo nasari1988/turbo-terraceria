@@ -1,0 +1,9 @@
+.gradle/
+build/
+.cxx/
+local.properties
+*.iml
+.idea/
+app/src/main/cpp/mgba
+out/
+build.log
