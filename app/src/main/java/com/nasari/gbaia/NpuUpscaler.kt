@@ -50,7 +50,6 @@ class NpuUpscaler private constructor(
                 setModelToken(token)
                 if (backend == QnnDelegate.Options.BackendType.HTP_BACKEND) {
                     setHtpPrecision(QnnDelegate.Options.HtpPrecision.HTP_PRECISION_FP16)
-                    setHtpPerformanceMode(QnnDelegate.Options.HtpPerformanceMode.PERFORMANCE_BURST)
                 }
             }
 
