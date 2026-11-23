@@ -40,6 +40,15 @@ Se instala encima de la versión anterior sin borrar tus partidas.
 - `tools/ai/`: generador de escenas, red (`student.py`), entrenamiento (`train.py`), modelo (`student.pt`)
   y conversión a shaders GLES3 (`gen_shaders.py` → `app/src/main/cpp/ai_shaders.h`). Verificado: los shaders dan el mismo resultado que PyTorch (diferencia máx. 1/255).
 
+## NPU (Hexagon)
+
+- Modo por defecto: **IA 4x en NPU**. LiteRT + delegado QNN de Qualcomm; el HTP del SM8735 solo acelera int8.
+- Modelos (en orden): `student_v3_a8w8` (48 canales, ~2x la v2), `student_v2_a8w8`. Los que fallan en el
+  celular se recuerdan y no se vuelven a probar. Si no hay NPU, cae a IA v2 en GPU.
+- Requiere `uses-native-library libcdsprpc.so` en el manifiesto (Android 12+).
+- Error frente a Real-ESRGAN en imágenes no vistas (Rojo Fuego / robot / Mode 7): v2 8.93 / 3.50 / 5.71,
+  v3 8.40 / 3.04 / 5.61 (sin IA: 11.17 / 4.42 / 6.68).
+
 ## Siguientes pasos
 
 - IA por capas (fondo y sprites por separado) y caché de tiles.

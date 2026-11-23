@@ -31,6 +31,6 @@ for name, rec in [("a16w8", recipe.static_wi8_ai16()), ("a8w8", recipe.static_wi
     qt.load_quantization_recipe(rec)
     calib = qt.calibrate({"serving_default": samples})
     res = qt.quantize(calib)
-    path = os.path.join(out_dir, f"student_v2_{name}.tflite")
+    path = os.path.join(out_dir, f"{os.path.basename(src).replace('.tflite', '')}_{name}.tflite")
     res.export_model(path, overwrite=True)
     print("guardado", path, os.path.getsize(path), "bytes")
