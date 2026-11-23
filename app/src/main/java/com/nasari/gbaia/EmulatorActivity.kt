@@ -140,11 +140,30 @@ class EmulatorActivity : Activity() {
         var last = System.nanoTime()
         var frames = 0
         var fpsStart = System.nanoTime()
+        var slowSeconds = 0
+        var lastScale = Native.getScale()
         while (running) {
             val now = System.nanoTime()
             if (now - fpsStart >= 1_000_000_000L) {
                 val fps = frames * 1e9 / (now - fpsStart)
-                val label = Settings.scaleLabel(Native.getScale())
+                val current = Native.getScale()
+                val label = Settings.scaleLabel(current)
+                // Respaldo automático: si la IA no va a velocidad completa, bajar a un modo más ligero
+                if (current != lastScale) {
+                    slowSeconds = -2 // dar tiempo a que compile los shaders
+                    lastScale = current
+                }
+                val measuring = !paused && !fastForward && (current == Settings.AI || current == Settings.AI_LITE)
+                slowSeconds = if (measuring && fps < 50) slowSeconds + 1 else minOf(slowSeconds, 0)
+                if (slowSeconds >= 3) {
+                    val fallback = if (current == Settings.AI) Settings.AI_LITE else 8
+                    Native.setScale(fallback)
+                    Settings.setScale(this, fallback)
+                    val msg = "La imagen iba lenta (%.0f FPS): cambié a %s".format(fps, Settings.scaleLabel(fallback))
+                    runOnUiThread { Toast.makeText(this, msg, Toast.LENGTH_LONG).show() }
+                    slowSeconds = -2
+                    lastScale = fallback
+                }
                 runOnUiThread { fpsView.text = "%.1f FPS · %s".format(fps, label) }
                 frames = 0
                 fpsStart = now

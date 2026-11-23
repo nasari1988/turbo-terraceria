@@ -15,14 +15,15 @@
 #define W 240
 #define H 160
 #define FT (AI_CH / 4)  // texturas RGBA por capa intermedia
-#define NPASS (AI_LAYERS * AI_GROUPS + AI_LAST_PASSES)
+#define NPASS AI_NPASS
 
 static bool ready = false;
 static GLuint progs[NPASS];
+static GLuint fbos[NPASS];  // destino de cada pase
 static GLuint shuffle_prog;
 static GLuint feat[2][FT];  // capas intermedias (ida y vuelta)
 static GLuint last[12];     // 48 canales de la última convolución
-static GLuint fbo_feat[2][AI_GROUPS], fbo_last[3], fbo_out;
+static GLuint fbo_out;
 static GLuint out_tex;
 static GLuint vao;
 
@@ -99,17 +100,14 @@ bool AI_NAME(init)(void) {
 	if (!shuffle_prog) return false;
 
 	// RGBA16F para las capas intermedias (Adreno lo soporta como destino de dibujo)
-	for (int s = 0; s < 2; ++s) {
-		for (int i = 0; i < FT; ++i) feat[s][i] = make_tex(W, H, GL_RGBA16F, GL_RGBA, GL_HALF_FLOAT);
-		for (int g = 0; g < AI_GROUPS; ++g) {
-			fbo_feat[s][g] = make_fbo(&feat[s][g * 4], 4);
-			if (!fbo_feat[s][g]) return false;
-		}
-	}
+	for (int k = 0; k < 2; ++k)
+		for (int i = 0; i < FT; ++i) feat[k][i] = make_tex(W, H, GL_RGBA16F, GL_RGBA, GL_HALF_FLOAT);
 	for (int i = 0; i < 12; ++i) last[i] = make_tex(W, H, GL_RGBA16F, GL_RGBA, GL_HALF_FLOAT);
-	for (int g = 0; g < 3; ++g) {
-		fbo_last[g] = make_fbo(&last[g * 4], 4);
-		if (!fbo_last[g]) return false;
+	for (int i = 0; i < NPASS; ++i) {
+		int layer = AI_PASS_LAYER[i];
+		const GLuint* dst = layer == AI_LAYERS ? last : feat[layer & 1];
+		fbos[i] = make_fbo(&dst[AI_PASS_START[i]], AI_PASS_COUNT[i]);
+		if (!fbos[i]) return false;
 	}
 	out_tex = make_tex(W * AI_SCALE, H * AI_SCALE, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE);
 	fbo_out = make_fbo(&out_tex, 1);
@@ -139,24 +137,13 @@ unsigned AI_NAME(run)(unsigned in_tex) {
 	glViewport(0, 0, W, H);
 
 	GLuint input = in_tex;
-	int cur = 0;
-	for (int i = 0; i < AI_LAYERS; ++i) {
-		for (int g = 0; g < AI_GROUPS; ++g) {
-			GLuint p = progs[i * AI_GROUPS + g];
-			glBindFramebuffer(GL_FRAMEBUFFER, fbo_feat[cur][g]);
-			glUseProgram(p);
-			if (i == 0) bind_inputs(p, &input, 1);
-			else bind_inputs(p, feat[cur ^ 1], FT);
-			glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-		}
-		cur ^= 1;
-	}
-	// Última convolución: 48 canales en 3 pases
-	for (int g = 0; g < AI_LAST_PASSES; ++g) {
-		GLuint p = progs[AI_LAYERS * AI_GROUPS + g];
-		glBindFramebuffer(GL_FRAMEBUFFER, fbo_last[g]);
-		glUseProgram(p);
-		bind_inputs(p, feat[cur ^ 1], FT);
+	// Capa i escribe en feat[i % 2] y lee de feat[(i - 1) % 2]; la última escribe en last[]
+	for (int i = 0; i < NPASS; ++i) {
+		int layer = AI_PASS_LAYER[i];
+		glBindFramebuffer(GL_FRAMEBUFFER, fbos[i]);
+		glUseProgram(progs[i]);
+		if (layer == 0) bind_inputs(progs[i], &input, 1);
+		else bind_inputs(progs[i], feat[(layer - 1) & 1], FT);
 		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 	}
 	// Pixel shuffle 4x + entrada agrandada
@@ -188,8 +175,7 @@ void AI_NAME(deinit)(void) {
 	glDeleteTextures(2 * FT, &feat[0][0]);
 	glDeleteTextures(12, last);
 	glDeleteTextures(1, &out_tex);
-	glDeleteFramebuffers(2 * AI_GROUPS, &fbo_feat[0][0]);
-	glDeleteFramebuffers(3, fbo_last);
+	glDeleteFramebuffers(NPASS, fbos);
 	glDeleteFramebuffers(1, &fbo_out);
 	glDeleteVertexArrays(1, &vao);
 	ready = false;

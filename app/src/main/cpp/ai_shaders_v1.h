@@ -2,9 +2,12 @@
 #pragma once
 #define AI_CH 16
 #define AI_LAYERS 7
-#define AI_GROUPS 1
-#define AI_LAST_PASSES 3
+#define AI_NPASS 10
 #define AI_SCALE 4
+// Por pase: capa (AI_LAYERS = la última), primer vec4 de salida y cuántos (MRT)
+static const int AI_PASS_LAYER[] = {0,1,2,3,4,5,6,7,7,7};
+static const int AI_PASS_START[] = {0,0,0,0,0,0,0,0,4,8};
+static const int AI_PASS_COUNT[] = {4,4,4,4,4,4,4,4,4,4};
 static const char* const AI_CONV_SHADERS[] = {
 "#version 300 es\n"
 "precision highp float;\n"
