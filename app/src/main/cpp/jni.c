@@ -5,6 +5,7 @@
 
 #include "ai_gl.h"
 #include "gba_core.h"
+#include "gpu_timer.h"
 #include "video_gl.h"
 
 #define FN(name) Java_com_nasari_gbaia_Native_##name
@@ -16,6 +17,7 @@ static ANativeWindow* pending = NULL;
 static ANativeWindow* current = NULL;
 static bool has_pending = false;
 static bool emu_alive = false;
+static float emu_ms = -1.0f;  // tiempo de CPU del núcleo por cuadro (promedio)
 
 static void sync_window(void) {
 	pthread_mutex_lock(&lock);
@@ -71,6 +73,7 @@ JNIEXPORT void JNICALL FN(stop)(JNIEnv* env, jclass cls) {
 	emu_alive = false;
 	ai_deinit();
 	ai1_deinit();
+	gpu_timer_reset();
 	video_set_window(NULL);
 	if (current) ANativeWindow_release(current);
 	current = NULL;
@@ -103,7 +106,12 @@ JNIEXPORT jint JNICALL FN(runFrame)(JNIEnv* env, jclass cls, jint keys, jshortAr
 	video_make_current();
 	jsize cap = (*env)->GetArrayLength(env, audio) / 2;
 	jshort* au = (*env)->GetPrimitiveArrayCritical(env, audio, NULL);
+	struct timespec t0, t1;
+	clock_gettime(CLOCK_MONOTONIC, &t0);
 	int n = gba_run_frame((uint32_t) keys, au, cap);
+	clock_gettime(CLOCK_MONOTONIC, &t1);
+	float ms = (t1.tv_sec - t0.tv_sec) * 1e3f + (t1.tv_nsec - t0.tv_nsec) / 1e6f;
+	emu_ms = emu_ms < 0 ? ms : emu_ms * 0.95f + ms * 0.05f;
 	(*env)->ReleasePrimitiveArrayCritical(env, audio, au, 0);
 	if (present) {
 		unsigned tex;
@@ -152,4 +160,13 @@ JNIEXPORT void JNICALL FN(copyPixels)(JNIEnv* env, jclass cls, jintArray pixels)
 	jint* px = (*env)->GetPrimitiveArrayCritical(env, pixels, NULL);
 	gba_copy_pixels((uint32_t*) px);
 	(*env)->ReleasePrimitiveArrayCritical(env, pixels, px, 0);
+}
+
+// [ms de GPU de la IA (-1 = sin dato), ms de CPU del núcleo por cuadro]
+JNIEXPORT jfloatArray JNICALL FN(stats)(JNIEnv* env, jclass cls) {
+	(void) cls;
+	jfloat v[2] = {gpu_timer_ms(), emu_ms};
+	jfloatArray a = (*env)->NewFloatArray(env, 2);
+	(*env)->SetFloatArrayRegion(env, a, 0, 2, v);
+	return a;
 }

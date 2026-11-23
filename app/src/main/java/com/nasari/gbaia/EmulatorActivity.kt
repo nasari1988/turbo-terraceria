@@ -58,6 +58,7 @@ class EmulatorActivity : Activity() {
             setTextColor(Color.YELLOW)
             setShadowLayer(4f, 0f, 0f, Color.BLACK)
             textSize = 14f
+            gravity = Gravity.CENTER
             visibility = if (Settings.showFps(context)) View.VISIBLE else View.GONE
         }
         setContentView(FrameLayout(this).apply {
@@ -164,7 +165,14 @@ class EmulatorActivity : Activity() {
                     slowSeconds = -2
                     lastScale = fallback
                 }
-                runOnUiThread { fpsView.text = "%.1f FPS · %s".format(fps, label) }
+                val st = Native.stats()
+                val ai = current == Settings.AI || current == Settings.AI_LITE
+                val detail = buildString {
+                    append("%.1f FPS · %s".format(fps, label))
+                    append("\nnúcleo %.1f ms".format(st[1]))
+                    if (ai) append(if (st[0] >= 0) " · IA en GPU %.1f ms (de 16.7)".format(st[0]) else " · IA en GPU: sin medición")
+                }
+                runOnUiThread { fpsView.text = detail }
                 frames = 0
                 fpsStart = now
             }

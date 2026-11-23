@@ -3,6 +3,7 @@
 // Fase 2: renderizador OpenGL de mGBA a alta resolución (1x-8x) en la GPU.
 #include "gba_core.h"
 #include "ai_gl.h"
+#include "gpu_timer.h"
 
 #include <fcntl.h>
 #include <stdarg.h>
@@ -92,6 +93,7 @@ void gba_unload(void) {
 
 void gba_set_scale(int s) {
 	if (!core || !have_gl) return;
+	gpu_timer_reset();  // la medición anterior era de otro modo
 	if (s == GBA_SCALE_AI || s == GBA_SCALE_AI_LITE) {
 		bool ok = s == GBA_SCALE_AI ? ai_init() : ai1_init();
 		if (!ok) return;   // sin soporte: se queda como está
@@ -167,7 +169,9 @@ void gba_frame_texture(unsigned* tex, int* w, int* h, bool* smooth) {
 	*w = GBA_W;
 	*h = GBA_H;
 	if (ai_on) {
+		gpu_timer_begin();
 		unsigned out = ai_on == GBA_SCALE_AI ? ai_run(sw_tex) : ai1_run(sw_tex);
+		gpu_timer_end();
 		if (out) {
 			*tex = out;
 			*w = GBA_W * 4;

@@ -39,6 +39,8 @@ object Native {
     @JvmStatic external fun copyPixels(pixels: IntArray)
     @JvmStatic external fun setScale(scale: Int)
     @JvmStatic external fun getScale(): Int
+    /** [ms de GPU de la IA (-1 = sin dato), ms de CPU del núcleo por cuadro]. */
+    @JvmStatic external fun stats(): FloatArray
     @JvmStatic external fun saveState(path: String): Boolean
     @JvmStatic external fun loadState(path: String): Boolean
 }

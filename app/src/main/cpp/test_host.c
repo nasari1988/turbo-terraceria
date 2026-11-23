@@ -9,6 +9,7 @@
 
 #include "ai_gl.h"
 #include "gba_core.h"
+#include "gpu_timer.h"
 #include "video_gl.h"
 
 int main(int argc, char** argv) {
@@ -47,6 +48,7 @@ int main(int argc, char** argv) {
 	int frames = atoi(argv[2]);
 	for (int i = 0; i < frames; ++i) gba_run_frame(i > 5 ? keys : 0, audio, 4096);
 
+	if (scale >= 0) printf("IA en GPU: %.2f ms (promedio medido)\n", gpu_timer_ms());
 	int w = GBA_W, h = GBA_H;
 	uint32_t* px;
 	if (scale >= 0) {
