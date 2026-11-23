@@ -130,8 +130,7 @@ class LauncherActivity : PickActivity() {
                             if (path == null || !File(path).isDirectory) toast("No pude usar esa carpeta")
                             else {
                                 LauncherPrefs.setRomRoot(this@LauncherActivity, path)
-                                Library.scan(this@LauncherActivity)
-                                loadLibrary(rescan = false)
+                                loadLibrary(rescan = true)
                             }
                         }
                     })

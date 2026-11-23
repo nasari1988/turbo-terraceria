@@ -23,6 +23,7 @@ object Covers {
     private val exec = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
     private val pending = HashSet<String>()
+    private val retryAfter = HashMap<String, Long>()
     private val indices = HashMap<String, List<String>>()
 
     private val bitmaps = object : LruCache<String, Bitmap>(48 * 1024 * 1024) {
@@ -45,16 +46,25 @@ object Covers {
         val key = f?.let { it.absolutePath + it.lastModified() }
         if (key != null) bitmaps.get(key)?.let { return it }
         val job = "${g.path}|${key ?: "bajar"}"
-        synchronized(pending) { if (!pending.add(job)) return null }
+        // Sin red o sin carátula: no reintentar en cada cuadro del carrusel (1 vez por minuto)
+        val now = System.currentTimeMillis()
+        synchronized(pending) {
+            if ((retryAfter[job] ?: 0L) > now) return null
+            if (!pending.add(job)) return null
+        }
         exec.execute {
+            var ok = false
             try {
                 var file = f
                 if (file == null && LauncherPrefs.coversAuto(c) && !missFile(c, g).exists()) file = download(c, g)
                 if (file != null) {
-                    decode(file, 512)?.let { bitmaps.put(file.absolutePath + file.lastModified(), it); main.post(onReady) }
+                    decode(file, 512)?.let { bitmaps.put(file.absolutePath + file.lastModified(), it); ok = true; main.post(onReady) }
                 }
             } finally {
-                synchronized(pending) { pending.remove(job) }
+                synchronized(pending) {
+                    pending.remove(job)
+                    if (!ok) retryAfter[job] = System.currentTimeMillis() + 60_000L
+                }
             }
         }
         return null
