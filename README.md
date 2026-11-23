@@ -49,6 +49,13 @@ Se instala encima de la versión anterior sin borrar tus partidas.
 - Error frente a Real-ESRGAN en imágenes no vistas (Rojo Fuego / robot / Mode 7): v2 8.93 / 3.50 / 5.71,
   v3 8.40 / 3.04 / 5.61 (sin IA: 11.17 / 4.42 / 6.68).
 
+## Modo híbrido
+
+- Menú > Resolución > **Híbrido: 8x en Mode 7 + IA en NPU**. La GPU dibuja a 8x y, con un parche a mGBA
+  (`patches/mgba-mascara-afin.patch`, se aplica solo al descargar mGBA), marca qué píxeles vienen de capas
+  afines (Mode 7). Ahí se usa el 8x; en el resto (sprites, texto, fondos 2D) se usa la IA de la NPU.
+- La demo `mode7demo.gba` ahora tiene suelo Mode 7 + montañas, nubes, texto y un kart en 2D para probarlo.
+
 ## Siguientes pasos
 
 - IA por capas (fondo y sprites por separado) y caché de tiles.

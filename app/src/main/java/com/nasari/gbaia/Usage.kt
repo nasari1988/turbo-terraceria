@@ -95,7 +95,7 @@ class Usage(private val context: Context) {
             append(if (cpu >= 0) "CPU app %.0f%%".format(cpu) else "CPU app ?")
             when {
                 gpu >= 0 -> append(" · GPU %.0f%%".format(gpu))
-                gpuAiMs >= 0 -> append(" · GPU (IA) %.0f%%".format(100f * gpuAiMs / 16.7f))
+                gpuAiMs >= 0 -> append(" · GPU (est.) %.0f%%".format(100f * gpuAiMs / 16.7f))
                 else -> append(" · GPU ?")
             }
             if (npuMs >= 0) append(" · NPU %.0f%%".format(minOf(100f, 100f * npuMs / 16.7f)))
@@ -107,6 +107,6 @@ class Usage(private val context: Context) {
     /** Qué medidores son reales y cuáles estimados (para el reporte). */
     fun sources(): String =
         "CPU: /proc/self/stat (solo la app, sobre $cores núcleos) · " +
-            "GPU: ${gpuFile?.path ?: "sin acceso al medidor del sistema; se estima con el tiempo de GPU de la IA"} · " +
+            "GPU: ${gpuFile?.path ?: "sin acceso al medidor del sistema; se estima con el tiempo de GPU de la IA o de armar la imagen de la NPU (sin contar el dibujo 8x del juego en el híbrido)"} · " +
             "NPU: tiempo por cuadro / 16.7 ms (estimado) · RAM: PSS de la app y memoria libre del sistema · Temp: batería"
 }

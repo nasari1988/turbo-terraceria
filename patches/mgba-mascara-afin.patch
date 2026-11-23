@@ -1,0 +1,112 @@
+diff --git a/src/gba/renderers/gl.c b/src/gba/renderers/gl.c
+index e4d6415..e279a87 100644
+--- a/src/gba/renderers/gl.c
++++ b/src/gba/renderers/gl.c
+@@ -561,20 +561,27 @@ static const char* const _finalize =
+ 	"uniform isampler2D window;\n"
+ 	"uniform sampler2D palette;\n"
+ 	"uniform isampler2D backdropFlags;\n"
+-	"out vec4 color;\n"
++	"uniform int affineMask;\n"
++	"OUT(0) out vec4 color;\n"
++	"OUT(1) out vec4 affine;\n"
++	"int topLayer = 5;\n"
++	"int bottomLayer = 5;\n"
+ 
+-	"void composite(vec4 pixel, ivec4 flags, inout vec4 topPixel, inout ivec4 topFlags, inout vec4 bottomPixel, inout ivec4 bottomFlags) {\n"
++	"void composite(vec4 pixel, ivec4 flags, inout vec4 topPixel, inout ivec4 topFlags, inout vec4 bottomPixel, inout ivec4 bottomFlags, int layer) {\n"
+ 	"	if (flags.x >= topFlags.x) {\n"
+ 	"		if (flags.x >= bottomFlags.x) {\n"
+ 	"			return;\n"
+ 	"		}\n"
+ 	"		bottomFlags = flags;\n"
+ 	"		bottomPixel = pixel;\n"
++	"		bottomLayer = layer;\n"
+ 	"	} else {\n"
+ 	"		bottomFlags = topFlags;\n"
+ 	"		topFlags = flags;\n"
+ 	"		bottomPixel = topPixel;\n"
+ 	"		topPixel = pixel;\n"
++	"		bottomLayer = topLayer;\n"
++	"		topLayer = layer;\n"
+ 	"	}\n"
+ 	"}\n"
+ 
+@@ -590,35 +597,35 @@ static const char* const _finalize =
+ 	"		vec4 pix = texelFetch(layers[4], coord, 0);\n"
+ 	"		if (pix.a != 0.) {\n"
+ 	"			ivec4 inflags = ivec4(texelFetch(objFlags, coord, 0));\n"
+-	"			composite(pix, inflags, topPixel, topFlags, bottomPixel, bottomFlags);\n"
++	"			composite(pix, inflags, topPixel, topFlags, bottomPixel, bottomFlags, 4);\n"
+ 	"		}\n"
+ 	"	}\n"
+ 	"	if ((layerWindow & 1) != 0) {\n"
+ 	"		vec4 pix = texelFetch(layers[0], coord, 0);\n"
+ 	"		if (pix.a != 0.) {\n"
+ 	"			ivec4 inflags = ivec4(texelFetch(backdropFlags, ivec2(1, texCoord.y), 0));\n"
+-	"			composite(pix, inflags, topPixel, topFlags, bottomPixel, bottomFlags);\n"
++	"			composite(pix, inflags, topPixel, topFlags, bottomPixel, bottomFlags, 0);\n"
+ 	"		}\n"
+ 	"	}\n"
+ 	"	if ((layerWindow & 2) != 0) {\n"
+ 	"		vec4 pix = texelFetch(layers[1], coord, 0);\n"
+ 	"		if (pix.a != 0.) {\n"
+ 	"			ivec4 inflags = ivec4(texelFetch(backdropFlags, ivec2(2, texCoord.y), 0));\n"
+-	"			composite(pix, inflags, topPixel, topFlags, bottomPixel, bottomFlags);\n"
++	"			composite(pix, inflags, topPixel, topFlags, bottomPixel, bottomFlags, 1);\n"
+ 	"		}\n"
+ 	"	}\n"
+ 	"	if ((layerWindow & 4) != 0) {\n"
+ 	"		vec4 pix = texelFetch(layers[2], coord, 0);\n"
+ 	"		if (pix.a != 0.) {\n"
+ 	"			ivec4 inflags = ivec4(texelFetch(backdropFlags, ivec2(3, texCoord.y), 0));\n"
+-	"			composite(pix, inflags, topPixel, topFlags, bottomPixel, bottomFlags);\n"
++	"			composite(pix, inflags, topPixel, topFlags, bottomPixel, bottomFlags, 2);\n"
+ 	"		}\n"
+ 	"	}\n"
+ 	"	if ((layerWindow & 8) != 0) {\n"
+ 	"		vec4 pix = texelFetch(layers[3], coord, 0);\n"
+ 	"		if (pix.a != 0.) {\n"
+ 	"			ivec4 inflags = ivec4(texelFetch(backdropFlags, ivec2(4, texCoord.y), 0));\n"
+-	"			composite(pix, inflags, topPixel, topFlags, bottomPixel, bottomFlags);\n"
++	"			composite(pix, inflags, topPixel, topFlags, bottomPixel, bottomFlags, 3);\n"
+ 	"		}\n"
+ 	"	}\n"
+ 	"	if ((layerWindow & 32) == 0) {\n"
+@@ -635,6 +642,7 @@ static const char* const _finalize =
+ 	"		}\n"
+ 	"	}\n"
+ 	"	color = topPixel;\n"
++	"	affine = vec4(topLayer < 4 && ((affineMask >> topLayer) & 1) != 0 ? 1. : 0., 0., 0., 1.);\n"
+ 	"}";
+ 
+ static const GLint _vertices[] = {
+@@ -1641,6 +1649,10 @@ static void GBAVideoGLRendererWriteBLDCNT(struct GBAVideoGLRenderer* renderer, u
+ 	renderer->target2Bd = GBARegisterBLDCNTGetTarget2Bd(value);
+ }
+ 
++// GBA IA (modo híbrido): si no es 0, el paso final también escribe aquí una máscara
++// (R = 1 donde el píxel visible viene de una capa afín / Mode 7). Textura R8 del tamaño de la salida.
++unsigned GBAVideoGLAffineMaskTex = 0;
++
+ void _finalizeLayers(struct GBAVideoGLRenderer* renderer) {
+ 	const GLuint* uniforms = renderer->finalizeShader.uniforms;
+ 	glBindFramebuffer(GL_FRAMEBUFFER, renderer->fbo[GBA_GL_FBO_OUTPUT]);
+@@ -1648,6 +1660,17 @@ void _finalizeLayers(struct GBAVideoGLRenderer* renderer) {
+ 		_initFramebufferTexture(renderer->outputTex, GL_RGB, GL_COLOR_ATTACHMENT0, renderer->scale);
+ 		renderer->outputTexDirty = false;
+ 	}
++	{
++		static const GLenum one[] = { GL_COLOR_ATTACHMENT0 };
++		static const GLenum two[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
++		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, GBAVideoGLAffineMaskTex, 0);
++		glDrawBuffers(GBAVideoGLAffineMaskTex ? 2 : 1, GBAVideoGLAffineMaskTex ? two : one);
++		// Capas afines según el modo: 1 = BG2, 2 = BG2 y BG3
++		int mode = GBARegisterDISPCNTGetMode(renderer->dispcnt);
++		int affineMask = mode == 1 ? 4 : (mode == 2 ? 12 : 0);
++		glUseProgram(renderer->finalizeShader.program);
++		glUniform1i(glGetUniformLocation(renderer->finalizeShader.program, "affineMask"), affineMask);
++	}
+ 	glViewport(0, 0, GBA_VIDEO_HORIZONTAL_PIXELS * renderer->scale, GBA_VIDEO_VERTICAL_PIXELS * renderer->scale);
+ 	glScissor(0, 0, GBA_VIDEO_HORIZONTAL_PIXELS * renderer->scale, GBA_VIDEO_VERTICAL_PIXELS * renderer->scale);
+ 	if (GBARegisterDISPCNTIsForcedBlank(renderer->dispcnt)) {

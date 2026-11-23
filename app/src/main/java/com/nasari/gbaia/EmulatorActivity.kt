@@ -145,12 +145,12 @@ class EmulatorActivity : Activity() {
         }
         val savePath = File(saveDir, "$gameName.sav").absolutePath
         val wanted = if (gpu) Settings.scale(this) else 0
-        if (!Native.load(rom, savePath, if (wanted == Settings.NPU) 0 else wanted)) {
+        if (!Native.load(rom, savePath, when (wanted) { Settings.NPU -> 0; Settings.HYBRID -> 8; else -> wanted })) {
             fail("Este archivo no es un juego de GBA válido")
             return
         }
         mode = Native.getScale()
-        if (wanted == Settings.NPU) applyMode(Settings.NPU)?.let { msg -> runOnUiThread { toast(msg) } }
+        if (usesNpu(wanted)) applyMode(wanted)?.let { msg -> runOnUiThread { toast(msg) } }
         Diag.log("modo inicial: ${Settings.scaleLabel(mode)}")
 
         val audio = ShortArray(4096 * 2)
@@ -178,21 +178,22 @@ class EmulatorActivity : Activity() {
                     lastScale = current
                 }
                 val measuring = !paused && !fastForward &&
-                    (current == Settings.AI || current == Settings.AI_LITE || current == Settings.NPU)
+                    (current == Settings.AI || current == Settings.AI_LITE || usesNpu(current))
                 slowSeconds = if (measuring && fps < 50) slowSeconds + 1 else minOf(slowSeconds, 0)
                 val npuModel = npu?.modelName
-                if (slowSeconds >= 3 && current == Settings.NPU && npuModel != null && npuModel != NpuUpscaler.MODELS.last { it.endsWith("a8w8") }) {
+                if (slowSeconds >= 3 && usesNpu(current) && npuModel != null && npuModel != NpuUpscaler.MODELS.last { it.endsWith("a8w8") }) {
                     // Un modelo de NPU más ligero antes de rendirse con la NPU
                     Diag.log("respaldo automático: $npuModel lento en NPU (%.1f FPS, NPU %.1f ms, espera %.1f ms) -> modelo más ligero".format(fps, npu?.ms ?: -1f, npuWaitMs))
                     dropNpu()
                     Settings.addNpuFailed(this, listOf(npuModel))
-                    val msg = applyMode(Settings.NPU)
+                    val msg = applyMode(current)
                     runOnUiThread { toast("La IA en NPU iba lenta: uso un modelo más ligero" + if (msg != null) " · $msg" else "") }
                     slowSeconds = -2
                     lastScale = mode
                 } else if (slowSeconds >= 3) {
                     val fallback = when (current) {
                         Settings.NPU -> Settings.AI
+                        Settings.HYBRID -> 8
                         Settings.AI -> Settings.AI_LITE
                         else -> 8
                     }
@@ -210,12 +211,12 @@ class EmulatorActivity : Activity() {
                     append("%.1f FPS · %s".format(fps, label))
                     append("\nnúcleo %.1f ms".format(st[1]))
                     if (ai) append(if (st[0] >= 0) " · IA en GPU %.1f ms (de 16.7)".format(st[0]) else " · IA en GPU: sin medición")
-                    if (current == Settings.NPU) npu?.let {
+                    if (usesNpu(current)) npu?.let {
                         append(" · NPU %.1f ms (%s, espera %.1f ms)".format(it.ms, it.modelName.removePrefix("student_"), npuWaitMs))
                     }
                     // Uso de procesador, GPU, NPU y RAM
                     append("\n")
-                    append(usage.line(if (ai) st[0] else -1f, if (current == Settings.NPU) npu?.ms ?: -1f else -1f))
+                    append(usage.line(if (ai || usesNpu(current)) st[0] else -1f, if (usesNpu(current)) npu?.ms ?: -1f else -1f))
                 }
                 Diag.lastStats = detail.replace('\n', ' ')
                 runOnUiThread { fpsView.text = detail }
@@ -253,18 +254,27 @@ class EmulatorActivity : Activity() {
         track.release()
     }
 
-    /** Un cuadro de emulación; con present lo dibuja según el modo (GPU, IA o NPU). */
+    private fun usesNpu(m: Int) = m == Settings.NPU || m == Settings.HYBRID
+
+    /** Un cuadro de emulación; con present lo dibuja según el modo (GPU, IA, NPU o híbrido). */
     private fun step(keys: Int, audio: ShortArray, present: Boolean): Int {
         val up = npu
-        if (mode != Settings.NPU || up == null) return Native.runFrame(keys, audio, present && gpu)
+        if (!usesNpu(mode) || up == null) return Native.runFrame(keys, audio, present && gpu)
+        val hybrid = mode == Settings.HYBRID
         val n = Native.runFrame(keys, audio, false)
         if (present) {
             try {
                 // Cuadro N: preparar su entrada y mandarlo a la NPU...
                 val slot = npuSlot
                 npuSlot = 1 - slot
-                Native.npuFillInput(up.inputs[slot], up.inType, up.inScale, up.inZero)
-                Native.copyFrame(up.frames[slot])
+                if (hybrid) {
+                    // La GPU ya lo dibujó a 8x: guardar 8x + máscara y sacar la versión 1x para la NPU
+                    Native.hybridCapture(slot, up.frames[slot])
+                    Native.npuFillInputFrom(up.inputs[slot], up.inType, up.inScale, up.inZero, up.frames[slot])
+                } else {
+                    Native.npuFillInput(up.inputs[slot], up.inType, up.inScale, up.inZero)
+                    Native.copyFrame(up.frames[slot])
+                }
                 val prev = npuPending
                 val prevSlot = npuPendingSlot
                 npuPending = npuExec.submit { up.run(slot) }
@@ -275,16 +285,18 @@ class EmulatorActivity : Activity() {
                     prev.get()
                     val w = (System.nanoTime() - t0) / 1e6f
                     npuWaitMs = if (npuWaitMs < 0) w else npuWaitMs * 0.9f + w * 0.1f
-                    Native.npuPresent(up.outputs[prevSlot], up.outType, up.outScale, up.outZero, up.frames[prevSlot])
+                    if (hybrid) Native.hybridPresent(prevSlot, up.outputs[prevSlot], up.outType, up.outScale, up.outZero, up.frames[prevSlot])
+                    else Native.npuPresent(up.outputs[prevSlot], up.outType, up.outScale, up.outZero, up.frames[prevSlot])
                 }
             } catch (e: Throwable) {
                 val cause = (e as? java.util.concurrent.ExecutionException)?.cause ?: e
                 Diag.npuStatus = "falló al correr: ${cause.javaClass.simpleName}: ${cause.message}"
                 Diag.log("NPU falló al correr: ${cause.message}")
                 dropNpu()
-                applyMode(Settings.AI)
-                Settings.setScale(this, Settings.AI)
-                runOnUiThread { toast("La NPU falló; sigo con IA v2 en GPU") }
+                val next = if (hybrid) 8 else Settings.AI
+                applyMode(next)
+                Settings.setScale(this, next)
+                runOnUiThread { toast("La NPU falló; sigo con " + Settings.scaleLabel(next)) }
             }
         }
         return n
@@ -304,7 +316,7 @@ class EmulatorActivity : Activity() {
 
     /** Cambia el modo de imagen (hilo del emulador). Devuelve un mensaje para mostrar. */
     private fun applyMode(s: Int): String? {
-        if (s == Settings.NPU) {
+        if (usesNpu(s)) {
             val up = npu ?: run {
                 val notes = mutableListOf<String>()
                 val t0 = System.nanoTime()
@@ -324,13 +336,32 @@ class EmulatorActivity : Activity() {
                 created
             }
             if (up == null) {
-                Native.setScale(Settings.AI)
+                val next = if (s == Settings.HYBRID) 8 else Settings.AI
+                Native.hybridSet(false)
+                Native.setScale(next)
                 mode = Native.getScale()
-                Settings.setScale(this, Settings.AI)
-                return "La NPU no se pudo usar (ver reporte); sigo con IA v2 en GPU"
+                Settings.setScale(this, next)
+                return "La NPU no se pudo usar (ver reporte); sigo con " + Settings.scaleLabel(next)
             }
-            Native.setScale(0) // la NPU trabaja sobre el cuadro exacto
-            mode = Settings.NPU
+            try {
+                npuPending?.get()
+            } catch (_: Throwable) {
+            }
+            npuPending = null
+            if (s == Settings.HYBRID) {
+                // GPU a 8x con máscara de capas Mode 7; la NPU mejora el resto
+                Native.setScale(8)
+                if (!Native.hybridSet(true)) {
+                    Diag.log("híbrido: no se pudo activar la máscara; queda 8x")
+                    mode = Native.getScale()
+                    return "No se pudo activar el modo híbrido; queda 8x"
+                }
+                mode = Settings.HYBRID
+            } else {
+                Native.hybridSet(false)
+                Native.setScale(0) // la NPU trabaja sobre el cuadro exacto
+                mode = Settings.NPU
+            }
             Diag.log("modo -> ${Settings.scaleLabel(mode)}")
             return Settings.scaleLabel(mode)
         }
@@ -339,6 +370,7 @@ class EmulatorActivity : Activity() {
         } catch (_: Throwable) {
         }
         npuPending = null
+        Native.hybridSet(false)
         Native.setScale(s)
         mode = Native.getScale()
         Diag.log("modo -> ${Settings.scaleLabel(mode)}")

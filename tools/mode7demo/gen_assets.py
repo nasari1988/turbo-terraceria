@@ -91,6 +91,68 @@ def arr(name, ctype, data, per=16):
     rows = [", ".join(str(v) for v in data[i:i + per]) for i in range(0, len(data), per)]
     return f"static const {ctype} {name}[{len(data)}] = {{\n  " + ",\n  ".join(rows) + "\n};\n"
 
+# ---------- Capa 2D (BG0, 4bpp, paleta 1): montañas, nubes y texto ----------
+from PIL import Image, ImageDraw, ImageFont
+bg_pal = [(0, 0, 0), (96, 80, 160), (120, 104, 184), (240, 240, 248), (200, 208, 232),
+          (248, 248, 248), (24, 24, 40), (248, 200, 64)]
+strip = Image.new("P", (256, 40), 0)
+strip.putpalette([c for col in bg_pal for c in col] + [0] * (256 - len(bg_pal)) * 3)
+d = ImageDraw.Draw(strip)
+# montañas (dos tonos) apoyadas en el horizonte (y=33)
+for x0, w, h, col in [(-10, 90, 16, 1), (60, 110, 20, 2), (150, 80, 14, 1), (200, 90, 18, 2)]:
+    d.polygon([(x0, 33), (x0 + w // 2, 33 - h), (x0 + w, 33)], fill=col)
+    d.polygon([(x0 + w // 2 - 4, 33 - h + 4), (x0 + w // 2, 33 - h), (x0 + w // 2 + 4, 33 - h + 4)], fill=3)
+# nubes
+for cx, cy in [(40, 20), (130, 16), (210, 22)]:
+    for dx, r in [(-8, 5), (0, 7), (9, 5)]:
+        d.ellipse([cx + dx - r, cy - r // 2 - 2, cx + dx + r, cy + r // 2 + 2], fill=4)
+        d.ellipse([cx + dx - r + 1, cy - r // 2 - 3, cx + dx + r - 1, cy + r // 2], fill=5)
+# texto del marcador con contorno
+font = ImageFont.load_default_imagefont() if hasattr(ImageFont, "load_default_imagefont") else ImageFont.load_default()
+d.fontmode = "1"
+for ox in (-1, 0, 1):
+    for oy in (-1, 0, 1):
+        d.text((4 + ox, 1 + oy), "VUELTA 1/3", fill=6, font=font)
+d.text((4, 1), "VUELTA 1/3", fill=7, font=font)
+px = strip.load()
+bg_tiles, bg_index, bg_map = [], {}, [0] * (32 * 32)
+bg_tiles.append(bytes(32))  # tile 0 transparente
+bg_index[bytes(32)] = 0
+for ty in range(5):
+    for tx in range(32):
+        data = bytearray()
+        for y in range(8):
+            for x in range(0, 8, 2):
+                a, b = px[tx * 8 + x, ty * 8 + y], px[tx * 8 + x + 1, ty * 8 + y]
+                data.append(a | (b << 4))
+        data = bytes(data)
+        if data not in bg_index:
+            bg_index[data] = len(bg_tiles)
+            bg_tiles.append(data)
+        bg_map[ty * 32 + tx] = bg_index[data] | (1 << 12)  # paleta 1
+for i, c in enumerate(bg_pal):
+    pal[16 + i] = rgb(*c)
+
+# ---------- Sprite: kart 32x32 (4bpp, paleta de sprites 0) ----------
+obj_pal = [(0, 0, 0), (24, 24, 32), (220, 40, 40), (160, 24, 32), (248, 248, 248), (60, 120, 220), (248, 208, 64), (90, 90, 100)]
+kart = Image.new("P", (32, 32), 0)
+kart.putpalette([c for col in obj_pal for c in col] + [0] * (256 - len(obj_pal)) * 3)
+k = ImageDraw.Draw(kart)
+k.rectangle([2, 18, 9, 29], fill=1); k.rectangle([22, 18, 29, 29], fill=1)          # llantas traseras
+k.rectangle([4, 8, 9, 15], fill=1); k.rectangle([22, 8, 27, 15], fill=1)            # llantas delanteras
+k.polygon([(8, 30), (8, 12), (12, 4), (19, 4), (23, 12), (23, 30)], fill=2)         # carrocería
+k.polygon([(10, 30), (10, 14), (13, 8), (18, 8), (21, 14), (21, 30)], fill=3)
+k.ellipse([11, 12, 20, 22], fill=5); k.ellipse([13, 13, 18, 17], fill=4)            # casco
+k.rectangle([7, 26, 24, 29], fill=7); k.rectangle([12, 2, 19, 4], fill=6)           # alerón / nariz
+kp = kart.load()
+obj_tiles = bytearray()
+for ty in range(4):
+    for tx in range(4):
+        for y in range(8):
+            for x in range(0, 8, 2):
+                obj_tiles.append(kp[tx * 8 + x, ty * 8 + y] | (kp[tx * 8 + x + 1, ty * 8 + y] << 4))
+obj_pal16 = [rgb(*c) for c in obj_pal] + [0] * 8
+
 flat_tiles = [p for t in tiles for p in t]
 with open("assets.h", "w") as f:
     f.write("// Generado por gen_assets.py. Gráficos originales.\n#pragma once\n#include <stdint.h>\n")
@@ -101,4 +163,8 @@ with open("assets.h", "w") as f:
     f.write(arr("sin_lut", "int16_t", sin_lut))
     f.write(arr("zd8", "int16_t", zd8))
     f.write(arr("sky", "uint16_t", sky))
+    f.write("__attribute__((aligned(4))) " + arr("bg0_tiles", "uint8_t", [b for t in bg_tiles for b in t], 32))
+    f.write(arr("bg0_map", "uint16_t", bg_map, 32))
+    f.write("__attribute__((aligned(4))) " + arr("kart_tiles", "uint8_t", list(obj_tiles), 32))
+    f.write(arr("obj_palette", "uint16_t", obj_pal16))
 print(len(tiles), "tiles")

@@ -8,6 +8,7 @@
 #include "gba_core.h"
 #include "gpu_timer.h"
 #include "npu_gl.h"
+#include "hybrid_gl.h"
 #include "video_gl.h"
 
 #define FN(name) Java_com_nasari_gbaia_Native_##name
@@ -77,6 +78,7 @@ JNIEXPORT void JNICALL FN(stop)(JNIEnv* env, jclass cls) {
 	ai1_deinit();
 	gpu_timer_reset();
 	npu_gl_deinit();
+	hybrid_disable();
 	video_set_window(NULL);
 	if (current) ANativeWindow_release(current);
 	current = NULL;
@@ -196,7 +198,9 @@ JNIEXPORT jboolean JNICALL FN(npuPresent)(JNIEnv* env, jclass cls, jobject buf, 
 	if (!raw || !frame) return false;
 	sync_window();
 	video_make_current();
+	gpu_timer_begin();  // tiempo de GPU para armar la imagen con la salida de la NPU
 	unsigned out = npu_compose_frame(raw, type, scale, zp, frame);
+	gpu_timer_end();
 	if (!out) return false;
 	video_present(out, GBA_W * 4, GBA_H * 4, true);
 	return true;
@@ -205,4 +209,49 @@ JNIEXPORT jboolean JNICALL FN(npuPresent)(JNIEnv* env, jclass cls, jobject buf, 
 JNIEXPORT jstring JNICALL FN(glInfo)(JNIEnv* env, jclass cls) {
 	(void) cls;
 	return (*env)->NewStringUTF(env, video_info());
+}
+
+// ---------- Modo híbrido: 8x (GPU) en capas Mode 7 + IA (NPU) en el resto ----------
+
+JNIEXPORT jboolean JNICALL FN(hybridSet)(JNIEnv* env, jclass cls, jboolean on) {
+	(void) env;
+	(void) cls;
+	video_make_current();
+	if (!on) {
+		hybrid_disable();
+		return true;
+	}
+	return hybrid_enable(gba_get_scale());
+}
+
+JNIEXPORT jboolean JNICALL FN(hybridCapture)(JNIEnv* env, jclass cls, jint slot, jobject frameBuf) {
+	(void) cls;
+	uint32_t* frame = (*env)->GetDirectBufferAddress(env, frameBuf);
+	if (!frame) return false;
+	video_make_current();
+	return hybrid_capture(slot, frame);
+}
+
+JNIEXPORT void JNICALL FN(npuFillInputFrom)(JNIEnv* env, jclass cls, jobject buf, jint type, jfloat scale, jint zp, jobject frameBuf) {
+	(void) cls;
+	void* in = (*env)->GetDirectBufferAddress(env, buf);
+	const uint32_t* frame = (*env)->GetDirectBufferAddress(env, frameBuf);
+	if (in && frame) npu_fill_input_q(frame, in, type, scale, zp);
+}
+
+JNIEXPORT jboolean JNICALL FN(hybridPresent)(JNIEnv* env, jclass cls, jint slot, jobject buf, jint type, jfloat scale, jint zp, jobject frameBuf) {
+	(void) cls;
+	const void* raw = (*env)->GetDirectBufferAddress(env, buf);
+	const uint32_t* frame = (*env)->GetDirectBufferAddress(env, frameBuf);
+	if (!raw || !frame) return false;
+	sync_window();
+	video_make_current();
+	gpu_timer_begin();  // tiempo de GPU para combinar IA + 8x
+	unsigned ai = npu_compose_frame(raw, type, scale, zp, frame);
+	unsigned out = ai ? hybrid_mix(slot, ai) : 0;
+	gpu_timer_end();
+	if (!out) return false;
+	int s = hybrid_scale();
+	video_present(out, GBA_W * s, GBA_H * s, false);
+	return true;
 }

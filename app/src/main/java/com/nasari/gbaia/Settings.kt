@@ -9,9 +9,11 @@ object Settings {
     const val AI_LITE = 101
     /** IA v2 calculada en la NPU Hexagon (solo en Kotlin; el núcleo va en modo 0). */
     const val NPU = 110
+    /** GPU a 8x en las capas Mode 7 + IA en la NPU para el pixel art. */
+    const val HYBRID = 120
 
     /** IA, original exacto (CPU) y resolución interna en la GPU. */
-    val SCALES = listOf(AI, NPU, AI_LITE, 0, 2, 4, 6, 8)
+    val SCALES = listOf(NPU, HYBRID, AI, AI_LITE, 0, 2, 4, 6, 8)
 
     /** Por defecto IA en la NPU (si no se puede, el emulador cae solo a IA v2 en GPU). */
     fun scale(context: Context): Int = prefs(context).getInt("escala", NPU)
@@ -34,6 +36,7 @@ object Settings {
         AI -> "IA 4x v2 (mejor calidad)"
         AI_LITE -> "IA 4x ligera (v1)"
         NPU -> "IA 4x en NPU (recomendada)"
+        HYBRID -> "Híbrido: 8x en Mode 7 + IA en NPU"
         0 -> "Original (exacto, CPU)"
         8 -> "8x · 1920×1280 (máxima)"
         else -> "${scale}x · ${240 * scale}×${160 * scale}"

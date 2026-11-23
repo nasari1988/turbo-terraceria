@@ -47,6 +47,16 @@ object Native {
     @JvmStatic external fun npuPresent(
         output: java.nio.ByteBuffer, type: Int, scale: Float, zeroPoint: Int, frame: java.nio.ByteBuffer,
     ): Boolean
+    /** Modo híbrido: activa la máscara Mode 7 (requiere el renderizador de GPU, escala 8). */
+    @JvmStatic external fun hybridSet(on: Boolean): Boolean
+    /** Modo híbrido: guarda 8x + máscara en [slot] y deja el cuadro 1x en [frame]. */
+    @JvmStatic external fun hybridCapture(slot: Int, frame: java.nio.ByteBuffer): Boolean
+    /** Llena la entrada de la NPU desde un cuadro guardado (240x160 RGBX). */
+    @JvmStatic external fun npuFillInputFrom(input: java.nio.ByteBuffer, type: Int, scale: Float, zeroPoint: Int, frame: java.nio.ByteBuffer)
+    /** Modo híbrido: IA de [slot] + 8x con máscara, y lo muestra. */
+    @JvmStatic external fun hybridPresent(
+        slot: Int, output: java.nio.ByteBuffer, type: Int, scale: Float, zeroPoint: Int, frame: java.nio.ByteBuffer,
+    ): Boolean
     /** Copia el cuadro actual (240x160 RGBX) a [frame]. */
     @JvmStatic external fun copyFrame(frame: java.nio.ByteBuffer)
     /** GPU, versión y extensiones (para el reporte). */

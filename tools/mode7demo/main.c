@@ -7,6 +7,7 @@
 #define REG32(a) (*(volatile uint32_t*) (a))
 #define DISPCNT REG16(0x4000000)
 #define VCOUNT REG16(0x4000006)
+#define BG0CNT REG16(0x4000008)
 #define BG2CNT REG16(0x400000C)
 #define KEYS REG16(0x4000130)
 #define DMA0SAD REG32(0x40000B0)
@@ -20,6 +21,11 @@
 #define VRAM16 ((volatile uint16_t*) 0x6000000)
 #define MAP16 ((volatile uint16_t*) 0x6008000)
 #define PAL16 ((volatile uint16_t*) 0x5000000)
+#define OBJPAL16 ((volatile uint16_t*) 0x5000200)
+#define BG0TILES16 ((volatile uint16_t*) 0x6004000)
+#define BG0MAP16 ((volatile uint16_t*) 0x600E000)
+#define OBJTILES16 ((volatile uint16_t*) 0x6010000)
+#define OAM16 ((volatile uint16_t*) 0x7000000)
 
 #define FOCAL 160
 
@@ -75,9 +81,21 @@ int main(void) {
 	copy16(PAL16, palette, sizeof(palette));
 	copy16(VRAM16, tiles, sizeof(tiles));
 	copy16(MAP16, tilemap, sizeof(tilemap));
+	copy16(BG0TILES16, bg0_tiles, sizeof(bg0_tiles));
+	copy16(BG0MAP16, bg0_map, sizeof(bg0_map));
+	copy16(OBJTILES16, kart_tiles, sizeof(kart_tiles));
+	copy16(OBJPAL16, obj_palette, sizeof(obj_palette));
+	// Sprites: el kart (32x32, 4bpp) y los demás ocultos
+	for (int i = 0; i < 128; ++i) OAM16[i * 4] = 0x200;
+	OAM16[0] = 112;               // y, cuadrado, 4bpp
+	OAM16[1] = 104 | (2 << 14);   // x, tamaño 32x32
+	OAM16[2] = 0;                 // tile 0, prioridad 0, paleta 0
+	// BG0 (2D, 4bpp): tiles en bloque 1, mapa en bloque de pantalla 28, encima de todo
+	BG0CNT = (0 << 0) | (1 << 2) | (28 << 8);
 	// BG2 afín: bloque de tiles 0, mapa en bloque 16 (0x6008000), 1024x1024, sin repetición
-	BG2CNT = (0 << 2) | (16 << 8) | (3 << 14);
-	DISPCNT = 2 | (1 << 10);
+	BG2CNT = (1 << 0) | (0 << 2) | (16 << 8) | (3 << 14);
+	// Modo 1: BG0 normal + BG2 afín, sprites con mapeo 1D
+	DISPCNT = 1 | (1 << 6) | (1 << 8) | (1 << 10) | (1 << 12);
 
 	int32_t cx8 = (512 - 90) << 8;
 	int32_t cy8 = (512 + 26 * 8 + 12) << 8;  // en la recta, antes de la meta
