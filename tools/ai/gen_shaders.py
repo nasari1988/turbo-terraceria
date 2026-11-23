@@ -23,10 +23,14 @@ def vec4(vals):
     return "vec4(" + ",".join(f(v) for v in vals) + ")"
 
 
+# fp16 (mediump): en el Adreno va ~2x más rápido; error simulado <= 1/255 (ver sim_fp16.py)
+PREC = "mediump"
+
+
 def header(n_in):
-    s = "#version 300 es\nprecision highp float;\nprecision highp int;\n"
+    s = f"#version 300 es\nprecision {PREC} float;\nprecision highp int;\n"
     for i in range(n_in):
-        s += f"uniform highp sampler2D t{i};\n"
+        s += f"uniform {PREC} sampler2D t{i};\n"
     return s
 
 
@@ -70,11 +74,11 @@ def conv_shader(weight, bias, prelu, in_channels, out_start, n_out):
     return s
 
 
-SHUFFLE = """#version 300 es
-precision highp float;
+SHUFFLE = f"""#version 300 es
+precision {PREC} float;
 precision highp int;
-uniform highp sampler2D src;
-""" + "".join(f"uniform highp sampler2D c{i};\n" for i in range(12)) + """out vec4 color;
+uniform {PREC} sampler2D src;
+""" + "".join(f"uniform {PREC} sampler2D c{i};\n" for i in range(12)) + """out vec4 color;
 float pick(vec4 v, int k) { return k == 0 ? v.x : (k == 1 ? v.y : (k == 2 ? v.z : v.w)); }
 void main() {
   ivec2 q = ivec2(gl_FragCoord.xy);
