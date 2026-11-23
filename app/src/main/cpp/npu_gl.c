@@ -104,6 +104,46 @@ void npu_fill_input(const uint32_t* video, float* in) {
 	}
 }
 
+void npu_fill_input_q(const uint32_t* video, void* in, int type, float scale, int zp) {
+	if (type == NPU_F32) {
+		npu_fill_input(video, in);
+		return;
+	}
+	// Tabla: valor cuantizado para cada nivel de 0..255
+	int lut[256];
+	int lo = type == NPU_I8 ? -128 : -32768, hi = type == NPU_I8 ? 127 : 32767;
+	for (int v = 0; v < 256; ++v) {
+		float q = (v / 255.0f) / scale + zp;
+		int qi = (int) (q < 0 ? q - 0.5f : q + 0.5f);
+		lut[v] = qi < lo ? lo : (qi > hi ? hi : qi);
+	}
+	for (int i = 0; i < W * H; ++i) {
+		uint32_t c = video[i];
+		int r = lut[c & 0xFF], g = lut[(c >> 8) & 0xFF], b = lut[(c >> 16) & 0xFF];
+		if (type == NPU_I8) {
+			int8_t* o = (int8_t*) in + i * 3;
+			o[0] = (int8_t) r, o[1] = (int8_t) g, o[2] = (int8_t) b;
+		} else {
+			int16_t* o = (int16_t*) in + i * 3;
+			o[0] = (int16_t) r, o[1] = (int16_t) g, o[2] = (int16_t) b;
+		}
+	}
+}
+
+const float* npu_dequant(const void* out, int type, float scale, int zp) {
+	static float buf[W * H * CH];
+	if (type == NPU_F32) return out;
+	int n = W * H * CH;
+	if (type == NPU_I8) {
+		const int8_t* q = out;
+		for (int i = 0; i < n; ++i) buf[i] = (q[i] - zp) * scale;
+	} else {
+		const int16_t* q = out;
+		for (int i = 0; i < n; ++i) buf[i] = (q[i] - zp) * scale;
+	}
+	return buf;
+}
+
 unsigned npu_compose(const float* features, unsigned src_tex) {
 	if (!init()) return 0;
 	glBindTexture(GL_TEXTURE_2D, feat_tex);

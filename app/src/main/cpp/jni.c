@@ -175,16 +175,17 @@ JNIEXPORT jfloatArray JNICALL FN(stats)(JNIEnv* env, jclass cls) {
 
 // ---------- Modo NPU (la inferencia la hace LiteRT + QNN en Kotlin) ----------
 
-JNIEXPORT void JNICALL FN(npuFillInput)(JNIEnv* env, jclass cls, jobject buf) {
+JNIEXPORT void JNICALL FN(npuFillInput)(JNIEnv* env, jclass cls, jobject buf, jint type, jfloat scale, jint zp) {
 	(void) cls;
-	float* in = (*env)->GetDirectBufferAddress(env, buf);
-	if (in) npu_fill_input(gba_video_buffer(), in);
+	void* in = (*env)->GetDirectBufferAddress(env, buf);
+	if (in) npu_fill_input_q(gba_video_buffer(), in, type, scale, zp);
 }
 
-JNIEXPORT jboolean JNICALL FN(npuPresent)(JNIEnv* env, jclass cls, jobject buf) {
+JNIEXPORT jboolean JNICALL FN(npuPresent)(JNIEnv* env, jclass cls, jobject buf, jint type, jfloat scale, jint zp) {
 	(void) cls;
-	const float* feat = (*env)->GetDirectBufferAddress(env, buf);
-	if (!feat) return false;
+	const void* raw = (*env)->GetDirectBufferAddress(env, buf);
+	if (!raw) return false;
+	const float* feat = npu_dequant(raw, type, scale, zp);
 	sync_window();
 	video_make_current();
 	unsigned src;

@@ -6,3 +6,5 @@
 - `sim_fp16.py`: simula la red en 16 bits para medir el error de fp16.
 - `to_tflite.py`: modelo -> LiteRT para la NPU (`app/src/main/assets/student_v2.tflite`).
   Solo el cuerpo de la red (salida de 48 canales); el pixel shuffle lo hace la GPU (`npu_gl.c`).
+- `quantize.py`: cuantiza el .tflite para la NPU del Poco F7 (su HTP no acepta fp16).
+  a16w8 (pesos int8, activaciones int16) es la principal: error medio 0.1-0.3/255 frente a float.

@@ -237,9 +237,9 @@ class EmulatorActivity : Activity() {
         val n = Native.runFrame(keys, audio, false)
         if (present) {
             try {
-                Native.npuFillInput(up.input)
+                Native.npuFillInput(up.input, up.inType, up.inScale, up.inZero)
                 up.run()
-                Native.npuPresent(up.output)
+                Native.npuPresent(up.output, up.outType, up.outScale, up.outZero)
             } catch (e: Throwable) {
                 Diag.npuStatus = "falló al correr: ${e.javaClass.simpleName}: ${e.message}"
                 Diag.log("NPU falló al correr: ${e.message}")
@@ -265,7 +265,7 @@ class EmulatorActivity : Activity() {
                 }
                 notes.forEach { Diag.log("NPU · $it") }
                 Diag.npuStatus = if (created != null)
-                    "lista con ${created.modelName} (QNN HTP) · preparar %.0f ms".format((System.nanoTime() - t0) / 1e6)
+                    "lista con ${created.modelName} (QNN HTP) · %.1f ms por cuadro · preparar todo %.0f ms".format(created.ms, (System.nanoTime() - t0) / 1e6)
                 else "no se pudo usar (ver registro)"
                 npu = created
                 created
