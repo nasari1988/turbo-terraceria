@@ -14,6 +14,7 @@ object Diag {
     @Volatile var glInfo = "sin datos"
     @Volatile var npuStatus = "no probada"
     @Volatile var lastStats = "sin datos"
+    @Volatile var usageSources = "sin datos"
 
     @Synchronized
     fun log(msg: String) {
@@ -47,6 +48,7 @@ object Diag {
             appendLine("Juego: ${game ?: "-"}")
             appendLine("Modo: $mode")
             appendLine("Rendimiento: $lastStats")
+            appendLine("Medidores: $usageSources")
             appendLine("--- Registro ---")
             log.forEach { appendLine(it) }
             appendLine("--- Logcat (NPU/QNN) ---")

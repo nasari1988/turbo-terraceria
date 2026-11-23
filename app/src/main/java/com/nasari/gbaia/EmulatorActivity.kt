@@ -46,6 +46,7 @@ class EmulatorActivity : Activity() {
     private var npuPendingSlot = 0
     private var npuSlot = 0
     private var npuWaitMs = -1f
+    private val usage by lazy { Usage(this) }
     /** Tareas que deben correr en el hilo del emulador (ahí vive el contexto de GPU). */
     private val tasks = java.util.concurrent.ConcurrentLinkedQueue<() -> Unit>()
 
@@ -121,6 +122,7 @@ class EmulatorActivity : Activity() {
         gpu = Native.start()
         game.gpu = gpu
         Diag.glInfo = Native.glInfo()
+        Diag.usageSources = usage.sources()
         Diag.log("inicio: $gameName · GPU ${if (gpu) "ok" else "no disponible"}")
         try {
             runGame(uri)
@@ -211,6 +213,9 @@ class EmulatorActivity : Activity() {
                     if (current == Settings.NPU) npu?.let {
                         append(" · NPU %.1f ms (%s, espera %.1f ms)".format(it.ms, it.modelName.removePrefix("student_"), npuWaitMs))
                     }
+                    // Uso de procesador, GPU, NPU y RAM
+                    append("\n")
+                    append(usage.line(if (ai) st[0] else -1f, if (current == Settings.NPU) npu?.ms ?: -1f else -1f))
                 }
                 Diag.lastStats = detail.replace('\n', ' ')
                 runOnUiThread { fpsView.text = detail }
