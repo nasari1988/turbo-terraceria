@@ -31,7 +31,9 @@ class EmulatorActivity : Activity() {
     @Volatile private var fastForward = false
     @Volatile private var padKeys = 0
     @Volatile private var axisKeys = 0
-    private val coreLock = Any()
+    @Volatile private var gpu = true
+    /** Tareas que deben correr en el hilo del emulador (ahí vive el contexto de GPU). */
+    private val tasks = java.util.concurrent.ConcurrentLinkedQueue<() -> Unit>()
 
     private lateinit var gameName: String
     private val saveDir by lazy { File(filesDir, "saves").apply { mkdirs() } }
@@ -91,6 +93,16 @@ class EmulatorActivity : Activity() {
     }
 
     private fun emulate(uri: Uri) {
+        gpu = Native.start()
+        game.gpu = gpu
+        try {
+            runGame(uri)
+        } finally {
+            Native.stop() // guarda la partida y libera la GPU
+        }
+    }
+
+    private fun runGame(uri: Uri) {
         val rom = try {
             Roms.read(this, uri)
         } catch (e: Exception) {
@@ -98,14 +110,14 @@ class EmulatorActivity : Activity() {
             return
         }
         val savePath = File(saveDir, "$gameName.sav").absolutePath
-        val loaded = synchronized(coreLock) { Native.load(rom, savePath) }
-        if (!loaded) {
+        if (!Native.load(rom, savePath, if (gpu) Settings.scale(this) else 0)) {
             fail("Este archivo no es un juego de GBA válido")
             return
         }
 
-        val pixels = IntArray(Native.WIDTH * Native.HEIGHT)
         val audio = ShortArray(4096 * 2)
+        // Respaldo sin GPU
+        val pixels = IntArray(Native.WIDTH * Native.HEIGHT)
         val bitmap = Bitmap.createBitmap(Native.WIDTH, Native.HEIGHT, Bitmap.Config.ARGB_8888)
         val buffer = IntBuffer.wrap(pixels)
         val track = createAudio()
@@ -113,22 +125,26 @@ class EmulatorActivity : Activity() {
 
         var last = System.nanoTime()
         while (running) {
+            while (true) tasks.poll()?.invoke() ?: break
             if (paused) {
+                Native.idle()
                 Thread.sleep(16)
                 last = System.nanoTime()
                 continue
             }
             val keys = controls.keys or padKeys or axisKeys
             if (fastForward) {
-                // ~3x de velocidad, sin sonido
-                synchronized(coreLock) { repeat(3) { Native.runFrame(keys, pixels, audio) } }
-                draw(bitmap, buffer)
+                // ~3x de velocidad, sin sonido; solo se dibuja el último cuadro
+                Native.runFrame(keys, audio, false)
+                Native.runFrame(keys, audio, false)
+                Native.runFrame(keys, audio, gpu)
+                if (!gpu) drawFallback(bitmap, pixels, buffer)
                 val wait = 16_666_667L - (System.nanoTime() - last)
                 if (wait > 0) Thread.sleep(wait / 1_000_000, (wait % 1_000_000).toInt())
                 last = System.nanoTime()
             } else {
-                val n = synchronized(coreLock) { Native.runFrame(keys, pixels, audio) }
-                draw(bitmap, buffer)
+                val n = Native.runFrame(keys, audio, gpu)
+                if (!gpu) drawFallback(bitmap, pixels, buffer)
                 // La escritura bloqueante del audio marca el ritmo (~59.7 cuadros/s)
                 if (n > 0) track.write(audio, 0, n * 2)
                 last = System.nanoTime()
@@ -136,13 +152,21 @@ class EmulatorActivity : Activity() {
         }
         track.stop()
         track.release()
-        synchronized(coreLock) { Native.unload() } // guarda la partida
     }
 
-    private fun draw(bitmap: Bitmap, buffer: IntBuffer) {
+    private fun drawFallback(bitmap: Bitmap, pixels: IntArray, buffer: IntBuffer) {
+        Native.copyPixels(pixels)
         buffer.rewind()
         bitmap.copyPixelsFromBuffer(buffer)
-        game.draw(bitmap)
+        game.drawFallback(bitmap)
+    }
+
+    /** Corre [task] en el hilo del emulador y muestra el resultado. */
+    private fun onEmu(task: () -> String?) {
+        tasks.add {
+            val msg = task()
+            if (msg != null) runOnUiThread { toast(msg) }
+        }
     }
 
     private fun createAudio(): AudioTrack {
@@ -191,20 +215,54 @@ class EmulatorActivity : Activity() {
             "Continuar",
             "Guardar estado",
             "Cargar estado",
+            "Resolución: " + Settings.scaleLabel(if (gpu) Settings.scale(this) else 0),
             if (fastForward) "Velocidad normal" else "Avance rápido (3x)",
             if (controls.visibility == View.VISIBLE) "Ocultar controles" else "Mostrar controles",
             "Salir",
         )
+        var keepPaused = false
         AlertDialog.Builder(this)
             .setTitle(gameName)
             .setItems(options) { _, which ->
                 when (which) {
-                    1 -> toast(if (synchronized(coreLock) { Native.saveState(stateFile) }) "Estado guardado" else "No se pudo guardar")
-                    2 -> toast(if (synchronized(coreLock) { Native.loadState(stateFile) }) "Estado cargado" else "No hay estado guardado")
-                    3 -> fastForward = !fastForward
-                    4 -> controls.visibility = if (controls.visibility == View.VISIBLE) View.GONE else View.VISIBLE
-                    5 -> finish()
+                    1 -> onEmu { if (Native.saveState(stateFile)) "Estado guardado" else "No se pudo guardar" }
+                    2 -> onEmu { if (Native.loadState(stateFile)) "Estado cargado" else "No hay estado guardado" }
+                    3 -> {
+                        keepPaused = true
+                        showScaleMenu()
+                    }
+                    4 -> fastForward = !fastForward
+                    5 -> controls.visibility = if (controls.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+                    6 -> finish()
                 }
+            }
+            .setOnDismissListener {
+                if (!keepPaused) {
+                    paused = false
+                    hideSystemBars()
+                }
+            }
+            .show()
+    }
+
+    private fun showScaleMenu() {
+        if (!gpu) {
+            toast("Este celular no tiene GPU compatible (GLES3)")
+            paused = false
+            return
+        }
+        val values = Settings.SCALES
+        val current = values.indexOf(Settings.scale(this)).coerceAtLeast(0)
+        AlertDialog.Builder(this)
+            .setTitle("Resolución")
+            .setSingleChoiceItems(values.map { Settings.scaleLabel(it) }.toTypedArray(), current) { d, which ->
+                val s = values[which]
+                Settings.setScale(this, s)
+                onEmu {
+                    Native.setScale(s)
+                    "Resolución: " + Settings.scaleLabel(s)
+                }
+                d.dismiss()
             }
             .setOnDismissListener {
                 paused = false

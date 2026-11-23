@@ -40,6 +40,7 @@ jobs:
           gradle --no-daemon assembleRelease 2>&1 | tee build.log
           mkdir -p out
           cp app/build/outputs/apk/release/app-release.apk out/gba-ia.apk
+          cp tools/mode7demo/mode7demo.gba out/
 
       - name: Subir APK
         uses: actions/upload-artifact@v4
@@ -53,7 +54,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           gh release delete gba-ia-ultima --yes --cleanup-tag || true
-          gh release create gba-ia-ultima out/gba-ia.apk \
+          gh release create gba-ia-ultima out/gba-ia.apk out/mode7demo.gba \
             --title "GBA IA - última versión" \
             --notes "APK generado automáticamente del commit ${GITHUB_SHA::7} (rama gba-ia)." \
             --prerelease --target "$GITHUB_SHA"

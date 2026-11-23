@@ -7,3 +7,5 @@ local.properties
 app/src/main/cpp/mgba
 out/
 build.log
+tools/mode7demo/*.elf
+tools/mode7demo/assets.h

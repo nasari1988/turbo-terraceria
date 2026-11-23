@@ -22,9 +22,17 @@ enum {
 	KEY_L = 1 << 9,
 };
 
-bool gba_load(const void* rom, size_t size, const char* save_path);
+// Llamar con true si hay un contexto GLES3 activo en este hilo (antes de gba_load).
+void gba_use_gl(bool on);
+// video_scale: 0 = renderizador por software (exacto), 1-8 = renderizador GPU a esa escala.
+bool gba_load(const void* rom, size_t size, const char* save_path, int video_scale);
 void gba_unload(void);
-// Ejecuta un cuadro. pixels: 240*160 ARGB. Devuelve cuadros de audio estéreo escritos.
-int gba_run_frame(uint32_t keys, uint32_t* pixels, int16_t* audio, int audio_cap);
+void gba_set_scale(int video_scale);
+int gba_get_scale(void);
+// Ejecuta un cuadro. Devuelve cuadros de audio estéreo escritos en audio.
+int gba_run_frame(uint32_t keys, int16_t* audio, int audio_cap);
+// Último cuadro: como textura GL (requiere GL) o como píxeles (solo modo software).
+void gba_frame_texture(unsigned* tex, int* w, int* h);
+void gba_copy_pixels(uint32_t* pixels);
 bool gba_save_state(const char* path);
 bool gba_load_state(const char* path);

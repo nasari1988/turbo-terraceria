@@ -1,22 +1,44 @@
-// Envoltura mínima sobre el núcleo de mGBA.
-// Fase 1: emulación, video, audio, guardado y estados.
-// Más adelante aquí entra el renderizado por capas para la IA.
+// Envoltura sobre el núcleo de mGBA.
+// Fase 1: emulación, audio, guardado y estados.
+// Fase 2: renderizador OpenGL de mGBA a alta resolución (1x-8x) en la GPU.
 #include "gba_core.h"
 
 #include <fcntl.h>
+#include <stdarg.h>
 #include <string.h>
 
+#include <GLES3/gl3.h>
 #include <mgba/core/blip_buf.h>
 #include <mgba/core/core.h>
+#include <mgba/core/log.h>
 #include <mgba/core/serialize.h>
 #include <mgba/gba/core.h>
 #include <mgba-util/vfs.h>
 
 static struct mCore* core = NULL;
 static color_t video[GBA_W * GBA_H];
+static bool have_gl = false;
+static GLuint out_tex = 0;  // donde dibuja el renderizador OpenGL de mGBA
+static GLuint sw_tex = 0;   // copia del renderizador por software
+static int scale = 0;       // 0 = software (exacto), 1-8 = GPU
 
-bool gba_load(const void* rom, size_t size, const char* save_path) {
+// Sin registro: mGBA escribe mucho texto por cuadro y gasta CPU.
+static void quiet_log(struct mLogger* l, int category, enum mLogLevel level, const char* format, va_list args) {
+	(void) l;
+	(void) category;
+	(void) level;
+	(void) format;
+	(void) args;
+}
+static struct mLogger quiet = {.log = quiet_log, .filter = NULL};
+
+void gba_use_gl(bool on) {
+	have_gl = on;
+}
+
+bool gba_load(const void* rom, size_t size, const char* save_path, int video_scale) {
 	gba_unload();
+	mLogSetDefaultLogger(&quiet);
 	core = GBACoreCreate();
 	if (!core) return false;
 	if (!core->init(core)) {
@@ -28,6 +50,16 @@ bool gba_load(const void* rom, size_t size, const char* save_path) {
 	core->setAudioBufferSize(core, 4096);
 	blip_set_rates(core->getAudioChannel(core, 0), core->frequency(core), GBA_AUDIO_RATE);
 	blip_set_rates(core->getAudioChannel(core, 1), core->frequency(core), GBA_AUDIO_RATE);
+
+	scale = have_gl ? video_scale : 0;
+	if (scale < 0) scale = 0;
+	if (scale > 8) scale = 8;
+	if (have_gl) {
+		glGenTextures(1, &out_tex);
+		core->setVideoGLTex(core, out_tex);
+		mCoreConfigSetIntValue(&core->config, "hwaccelVideo", scale > 0);
+		mCoreConfigSetIntValue(&core->config, "videoScale", scale > 0 ? scale : 1);
+	}
 
 	struct VFile* vf = VFileMemChunk(rom, size);  // copia la ROM
 	if (!vf || !core->loadROM(core, vf)) {
@@ -48,17 +80,39 @@ void gba_unload(void) {
 	mCoreConfigDeinit(&core->config);
 	core->deinit(core);
 	core = NULL;
+	if (out_tex) glDeleteTextures(1, &out_tex);
+	if (sw_tex) glDeleteTextures(1, &sw_tex);
+	out_tex = sw_tex = 0;
 }
 
-int gba_run_frame(uint32_t keys, uint32_t* pixels, int16_t* audio, int audio_cap) {
+void gba_set_scale(int s) {
+	if (!core || !have_gl) return;
+	if (s < 0) s = 0;
+	if (s > 8) s = 8;
+	if (s == scale) return;
+	if (s == 0) {
+		mCoreConfigSetIntValue(&core->config, "hwaccelVideo", 0);
+		core->reloadConfigOption(core, "hwaccelVideo", &core->config);
+	} else {
+		mCoreConfigSetIntValue(&core->config, "videoScale", s);
+		if (scale == 0) {
+			mCoreConfigSetIntValue(&core->config, "hwaccelVideo", 1);
+			core->reloadConfigOption(core, "hwaccelVideo", &core->config);
+		} else {
+			core->reloadConfigOption(core, "videoScale", &core->config);
+		}
+	}
+	scale = s;
+}
+
+int gba_get_scale(void) {
+	return scale;
+}
+
+int gba_run_frame(uint32_t keys, int16_t* audio, int audio_cap) {
 	if (!core) return 0;
 	core->setKeys(core, keys);
 	core->runFrame(core);
-
-	// color_t de mGBA ya es RGBX en memoria; solo forzamos alfa opaco.
-	for (int i = 0; i < GBA_W * GBA_H; ++i) {
-		pixels[i] = video[i] | 0xFF000000u;
-	}
 
 	blip_t* left = core->getAudioChannel(core, 0);
 	blip_t* right = core->getAudioChannel(core, 1);
@@ -67,6 +121,33 @@ int gba_run_frame(uint32_t keys, uint32_t* pixels, int16_t* audio, int audio_cap
 	blip_read_samples(left, audio, n, 1);
 	blip_read_samples(right, audio + 1, n, 1);
 	return n;  // cuadros estéreo
+}
+
+void gba_copy_pixels(uint32_t* pixels) {
+	// color_t de mGBA ya es RGBX en memoria; solo forzamos alfa opaco.
+	for (int i = 0; i < GBA_W * GBA_H; ++i) pixels[i] = video[i] | 0xFF000000u;
+}
+
+void gba_frame_texture(unsigned* tex, int* w, int* h) {
+	if (scale > 0) {
+		*tex = out_tex;
+		*w = GBA_W * scale;
+		*h = GBA_H * scale;
+		return;
+	}
+	if (!sw_tex) {
+		glGenTextures(1, &sw_tex);
+		glBindTexture(GL_TEXTURE_2D, sw_tex);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, GBA_W, GBA_H, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	}
+	glBindTexture(GL_TEXTURE_2D, sw_tex);
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, GBA_W, GBA_H, GL_RGBA, GL_UNSIGNED_BYTE, video);
+	*tex = sw_tex;
+	*w = GBA_W;
+	*h = GBA_H;
 }
 
 bool gba_save_state(const char* path) {

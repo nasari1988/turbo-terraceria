@@ -9,10 +9,13 @@ import android.view.SurfaceHolder
 import android.view.SurfaceView
 
 /**
- * Dibuja la pantalla del GBA con escalado entero (en el Poco F7: 8x = 1920x1280)
- * y píxeles nítidos. Aquí entrará después el escalado con IA por capas.
+ * Superficie del juego. Normalmente dibuja la GPU desde el código nativo (EGL).
+ * Si el celular no tuviera GLES3, se usa [drawFallback] con Canvas.
  */
 class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback {
+    /** true cuando el nativo dibuja con GPU; entonces Canvas no debe tocar la superficie. */
+    @Volatile var gpu = true
+
     @Volatile private var ready = false
     private val paint = Paint().apply { isFilterBitmap = false }
     private val dst = Rect()
@@ -33,14 +36,16 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback 
         val x = (width - w) / 2
         val y = (height - h) / 2
         synchronized(dst) { dst.set(x, y, x + w, y + h) }
+        if (gpu) Native.setSurface(holder.surface)
     }
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
+        if (gpu) Native.setSurface(null)
         synchronized(lock) { ready = false }
     }
 
-    /** Se llama desde el hilo del emulador. */
-    fun draw(frame: Bitmap) {
+    /** Respaldo sin GPU. Se llama desde el hilo del emulador. */
+    fun drawFallback(frame: Bitmap) {
         synchronized(lock) {
             if (!ready) return
             try {

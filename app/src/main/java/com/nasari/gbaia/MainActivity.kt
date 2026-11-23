@@ -36,7 +36,7 @@ class MainActivity : Activity() {
                 typeface = Typeface.DEFAULT_BOLD
             })
             addView(TextView(context).apply {
-                text = "Fase 1: emulador base (mGBA). La mejora con IA llega en la siguiente fase."
+                text = "Fase 2: alta resolución por GPU (hasta 8x). Cámbiala en el menú del juego. La IA llega en la fase 3."
                 setTextColor(Color.rgb(165, 180, 252))
                 setPadding(0, dp(4), 0, dp(16))
             })

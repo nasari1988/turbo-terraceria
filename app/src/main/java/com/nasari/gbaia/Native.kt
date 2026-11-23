@@ -1,5 +1,7 @@
 package com.nasari.gbaia
 
+import android.view.Surface
+
 /** Puente con el núcleo de mGBA (app/src/main/cpp). */
 object Native {
     init {
@@ -22,10 +24,21 @@ object Native {
     const val R = 1 shl 8
     const val L = 1 shl 9
 
-    @JvmStatic external fun load(rom: ByteArray, savePath: String?): Boolean
-    @JvmStatic external fun unload()
-    /** Corre un cuadro. Devuelve cuántos cuadros de audio estéreo dejó en [audio]. */
-    @JvmStatic external fun runFrame(keys: Int, pixels: IntArray, audio: ShortArray): Int
+    /** Desde el hilo de la interfaz: la superficie donde se dibuja (o null). */
+    @JvmStatic external fun setSurface(surface: Surface?)
+
+    // ----- Solo desde el hilo del emulador -----
+    /** Crea el contexto de GPU. Devuelve false si no hay GLES3 (se usa el respaldo con Canvas). */
+    @JvmStatic external fun start(): Boolean
+    @JvmStatic external fun stop()
+    /** scale: 0 = original exacto (CPU), 1-8 = GPU a esa resolución. */
+    @JvmStatic external fun load(rom: ByteArray, savePath: String?, scale: Int): Boolean
+    @JvmStatic external fun idle()
+    /** Corre un cuadro (y lo dibuja si present). Devuelve cuadros de audio estéreo. */
+    @JvmStatic external fun runFrame(keys: Int, audio: ShortArray, present: Boolean): Int
+    @JvmStatic external fun copyPixels(pixels: IntArray)
+    @JvmStatic external fun setScale(scale: Int)
+    @JvmStatic external fun getScale(): Int
     @JvmStatic external fun saveState(path: String): Boolean
     @JvmStatic external fun loadState(path: String): Boolean
 }
