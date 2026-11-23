@@ -15,4 +15,7 @@ const float* npu_dequant(const void* out, int type, float scale, int zp);
 // Sube la salida de la NPU (float [160,240,48]) y hace pixel shuffle 4x + residuo con src_tex.
 // Devuelve la textura de 960x640 (0 si falla). Requiere contexto GL.
 unsigned npu_compose(const float* features, unsigned src_tex);
+// Igual que npu_compose pero con la salida cruda de la NPU (int8 se convierte en el shader)
+// y con el cuadro original que le corresponde ([frame], 240x160 RGBX).
+unsigned npu_compose_frame(const void* raw, int type, float scale, int zp, const uint32_t* frame);
 void npu_gl_deinit(void);

@@ -28,8 +28,11 @@ class NpuUpscaler private constructor(
     val outType: Int
     val outScale: Float
     val outZero: Int
-    val input: ByteBuffer
-    val output: ByteBuffer
+    // Dos juegos de búferes: mientras la NPU procesa uno, el emulador llena el otro
+    val inputs: Array<ByteBuffer>
+    val outputs: Array<ByteBuffer>
+    /** Cuadro original (240x160 RGBX) que corresponde a cada búfer, para el residuo. */
+    val frames: Array<ByteBuffer>
 
     init {
         val i = interpreter.getInputTensor(0)
@@ -40,15 +43,19 @@ class NpuUpscaler private constructor(
         inZero = i.quantizationParams().zeroPoint
         outScale = o.quantizationParams().scale
         outZero = o.quantizationParams().zeroPoint
-        input = ByteBuffer.allocateDirect(i.numBytes()).order(ByteOrder.nativeOrder())
-        output = ByteBuffer.allocateDirect(o.numBytes()).order(ByteOrder.nativeOrder())
+        inputs = Array(2) { ByteBuffer.allocateDirect(i.numBytes()).order(ByteOrder.nativeOrder()) }
+        outputs = Array(2) { ByteBuffer.allocateDirect(o.numBytes()).order(ByteOrder.nativeOrder()) }
+        frames = Array(2) { ByteBuffer.allocateDirect(240 * 160 * 4).order(ByteOrder.nativeOrder()) }
     }
 
     /** Promedio de ms por inferencia. */
     var ms = -1f
         private set
 
-    fun run() {
+    /** Corre la NPU sobre el juego de búferes [slot] (0 o 1). */
+    fun run(slot: Int = 0) {
+        val input = inputs[slot]
+        val output = outputs[slot]
         input.rewind()
         output.rewind()
         val t0 = System.nanoTime()

@@ -44,7 +44,11 @@ object Native {
     /** Modo NPU: llena la entrada de la NPU con el cuadro actual (float [160,240,3]). */
     @JvmStatic external fun npuFillInput(input: java.nio.ByteBuffer, type: Int, scale: Float, zeroPoint: Int)
     /** Modo NPU: compone la salida de la NPU en la GPU y la muestra. */
-    @JvmStatic external fun npuPresent(output: java.nio.ByteBuffer, type: Int, scale: Float, zeroPoint: Int): Boolean
+    @JvmStatic external fun npuPresent(
+        output: java.nio.ByteBuffer, type: Int, scale: Float, zeroPoint: Int, frame: java.nio.ByteBuffer,
+    ): Boolean
+    /** Copia el cuadro actual (240x160 RGBX) a [frame]. */
+    @JvmStatic external fun copyFrame(frame: java.nio.ByteBuffer)
     /** GPU, versión y extensiones (para el reporte). */
     @JvmStatic external fun glInfo(): String
     @JvmStatic external fun saveState(path: String): Boolean

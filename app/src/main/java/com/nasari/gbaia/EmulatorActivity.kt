@@ -40,6 +40,12 @@ class EmulatorActivity : Activity() {
     /** Modo de imagen actual (incluye NPU, que el núcleo no conoce). Solo se cambia en el hilo del emulador. */
     @Volatile private var mode = 0
     private var npu: NpuUpscaler? = null
+    // La NPU corre en su propio hilo, un cuadro detrás del emulador
+    private val npuExec = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private var npuPending: java.util.concurrent.Future<*>? = null
+    private var npuPendingSlot = 0
+    private var npuSlot = 0
+    private var npuWaitMs = -1f
     /** Tareas que deben correr en el hilo del emulador (ahí vive el contexto de GPU). */
     private val tasks = java.util.concurrent.ConcurrentLinkedQueue<() -> Unit>()
 
@@ -122,8 +128,8 @@ class EmulatorActivity : Activity() {
             Diag.log("error: ${e.javaClass.simpleName}: ${e.message}")
             throw e
         } finally {
-            npu?.close()
-            npu = null
+            dropNpu()
+            npuExec.shutdown()
             Native.stop() // guarda la partida y libera la GPU
         }
     }
@@ -172,7 +178,17 @@ class EmulatorActivity : Activity() {
                 val measuring = !paused && !fastForward &&
                     (current == Settings.AI || current == Settings.AI_LITE || current == Settings.NPU)
                 slowSeconds = if (measuring && fps < 50) slowSeconds + 1 else minOf(slowSeconds, 0)
-                if (slowSeconds >= 3) {
+                val npuModel = npu?.modelName
+                if (slowSeconds >= 3 && current == Settings.NPU && npuModel != null && npuModel != NpuUpscaler.MODELS.last { it.endsWith("a8w8") }) {
+                    // Un modelo de NPU más ligero antes de rendirse con la NPU
+                    Diag.log("respaldo automático: $npuModel lento en NPU (%.1f FPS, NPU %.1f ms, espera %.1f ms) -> modelo más ligero".format(fps, npu?.ms ?: -1f, npuWaitMs))
+                    dropNpu()
+                    Settings.addNpuFailed(this, listOf(npuModel))
+                    val msg = applyMode(Settings.NPU)
+                    runOnUiThread { toast("La IA en NPU iba lenta: uso un modelo más ligero" + if (msg != null) " · $msg" else "") }
+                    slowSeconds = -2
+                    lastScale = mode
+                } else if (slowSeconds >= 3) {
                     val fallback = when (current) {
                         Settings.NPU -> Settings.AI
                         Settings.AI -> Settings.AI_LITE
@@ -192,7 +208,9 @@ class EmulatorActivity : Activity() {
                     append("%.1f FPS · %s".format(fps, label))
                     append("\nnúcleo %.1f ms".format(st[1]))
                     if (ai) append(if (st[0] >= 0) " · IA en GPU %.1f ms (de 16.7)".format(st[0]) else " · IA en GPU: sin medición")
-                    if (current == Settings.NPU) npu?.let { append(" · NPU %.1f ms".format(it.ms)) }
+                    if (current == Settings.NPU) npu?.let {
+                        append(" · NPU %.1f ms (%s, espera %.1f ms)".format(it.ms, it.modelName.removePrefix("student_"), npuWaitMs))
+                    }
                 }
                 Diag.lastStats = detail.replace('\n', ' ')
                 runOnUiThread { fpsView.text = detail }
@@ -237,18 +255,46 @@ class EmulatorActivity : Activity() {
         val n = Native.runFrame(keys, audio, false)
         if (present) {
             try {
-                Native.npuFillInput(up.input, up.inType, up.inScale, up.inZero)
-                up.run()
-                Native.npuPresent(up.output, up.outType, up.outScale, up.outZero)
+                // Cuadro N: preparar su entrada y mandarlo a la NPU...
+                val slot = npuSlot
+                npuSlot = 1 - slot
+                Native.npuFillInput(up.inputs[slot], up.inType, up.inScale, up.inZero)
+                Native.copyFrame(up.frames[slot])
+                val prev = npuPending
+                val prevSlot = npuPendingSlot
+                npuPending = npuExec.submit { up.run(slot) }
+                npuPendingSlot = slot
+                // ...y mostrar el cuadro N-1, que la NPU procesó mientras el emulador hacía este
+                if (prev != null) {
+                    val t0 = System.nanoTime()
+                    prev.get()
+                    val w = (System.nanoTime() - t0) / 1e6f
+                    npuWaitMs = if (npuWaitMs < 0) w else npuWaitMs * 0.9f + w * 0.1f
+                    Native.npuPresent(up.outputs[prevSlot], up.outType, up.outScale, up.outZero, up.frames[prevSlot])
+                }
             } catch (e: Throwable) {
-                Diag.npuStatus = "falló al correr: ${e.javaClass.simpleName}: ${e.message}"
-                Diag.log("NPU falló al correr: ${e.message}")
+                val cause = (e as? java.util.concurrent.ExecutionException)?.cause ?: e
+                Diag.npuStatus = "falló al correr: ${cause.javaClass.simpleName}: ${cause.message}"
+                Diag.log("NPU falló al correr: ${cause.message}")
+                dropNpu()
                 applyMode(Settings.AI)
                 Settings.setScale(this, Settings.AI)
                 runOnUiThread { toast("La NPU falló; sigo con IA v2 en GPU") }
             }
         }
         return n
+    }
+
+    /** Espera el trabajo pendiente de la NPU y la libera. */
+    private fun dropNpu() {
+        try {
+            npuPending?.get()
+        } catch (_: Throwable) {
+        }
+        npuPending = null
+        npu?.close()
+        npu = null
+        npuWaitMs = -1f
     }
 
     /** Cambia el modo de imagen (hilo del emulador). Devuelve un mensaje para mostrar. */
@@ -283,6 +329,11 @@ class EmulatorActivity : Activity() {
             Diag.log("modo -> ${Settings.scaleLabel(mode)}")
             return Settings.scaleLabel(mode)
         }
+        try {
+            npuPending?.get() // no dejar trabajo de la NPU a medias
+        } catch (_: Throwable) {
+        }
+        npuPending = null
         Native.setScale(s)
         mode = Native.getScale()
         Diag.log("modo -> ${Settings.scaleLabel(mode)}")

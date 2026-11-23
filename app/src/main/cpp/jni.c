@@ -1,6 +1,7 @@
 #include <android/native_window_jni.h>
 #include <jni.h>
 #include <pthread.h>
+#include <string.h>
 #include <time.h>
 
 #include "ai_gl.h"
@@ -181,20 +182,23 @@ JNIEXPORT void JNICALL FN(npuFillInput)(JNIEnv* env, jclass cls, jobject buf, ji
 	if (in) npu_fill_input_q(gba_video_buffer(), in, type, scale, zp);
 }
 
-JNIEXPORT jboolean JNICALL FN(npuPresent)(JNIEnv* env, jclass cls, jobject buf, jint type, jfloat scale, jint zp) {
+// Copia el cuadro actual (240x160 RGBX): con la NPU en paralelo se compone un cuadro después.
+JNIEXPORT void JNICALL FN(copyFrame)(JNIEnv* env, jclass cls, jobject buf) {
+	(void) cls;
+	void* dst = (*env)->GetDirectBufferAddress(env, buf);
+	if (dst) memcpy(dst, gba_video_buffer(), GBA_W * GBA_H * 4);
+}
+
+JNIEXPORT jboolean JNICALL FN(npuPresent)(JNIEnv* env, jclass cls, jobject buf, jint type, jfloat scale, jint zp, jobject frameBuf) {
 	(void) cls;
 	const void* raw = (*env)->GetDirectBufferAddress(env, buf);
-	if (!raw) return false;
-	const float* feat = npu_dequant(raw, type, scale, zp);
+	const uint32_t* frame = (*env)->GetDirectBufferAddress(env, frameBuf);
+	if (!raw || !frame) return false;
 	sync_window();
 	video_make_current();
-	unsigned src;
-	int w, h;
-	bool smooth;
-	gba_frame_texture(&src, &w, &h, &smooth);  // sube el cuadro original (modo software)
-	unsigned out = npu_compose(feat, src);
+	unsigned out = npu_compose_frame(raw, type, scale, zp, frame);
 	if (!out) return false;
-	video_present(out, w * 4, h * 4, true);
+	video_present(out, GBA_W * 4, GBA_H * 4, true);
 	return true;
 }
 

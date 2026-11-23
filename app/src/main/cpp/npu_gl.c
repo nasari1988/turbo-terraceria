@@ -12,6 +12,9 @@
 static bool ready = false;
 static GLuint prog, feat_tex, out_tex, fbo, vao;
 static GLint loc_feat, loc_src;
+// Ruta int8: la salida de la NPU se sube tal cual (1.8 MB) y se pasa a float en el shader
+static GLuint prog_q, featq_tex, src_tex;
+static GLint locq_feat, locq_src, locq_scale, locq_zp;
 
 static const char* VS =
 	"#version 300 es\n"
@@ -34,6 +37,30 @@ static const char* FS =
 	"  vec4 v = texelFetch(feat, ivec2(p.x * 12 + c / 4, p.y), 0);\n"
 	"  int k = c - (c / 4) * 4;\n"
 	"  return k == 0 ? v.x : (k == 1 ? v.y : (k == 2 ? v.z : v.w));\n"
+	"}\n"
+	"void main() {\n"
+	"  ivec2 q = ivec2(gl_FragCoord.xy);\n"
+	"  ivec2 p = q / 4;\n"
+	"  int s = (q.y - p.y * 4) * 4 + (q.x - p.x * 4);\n"
+	"  vec3 base = texelFetch(src, p, 0).rgb;\n"
+	"  vec3 d = vec3(ch(p, s), ch(p, 16 + s), ch(p, 32 + s));\n"
+	"  color = vec4(clamp(base + d, 0.0, 1.0), 1.0);\n"
+	"}\n";
+
+static const char* FS_Q =
+	"#version 300 es\n"
+	"precision highp float;\n"
+	"precision highp int;\n"
+	"uniform highp isampler2D featq;\n"
+	"uniform highp sampler2D src;\n"
+	"uniform float scale;\n"
+	"uniform float zp;\n"
+	"out vec4 color;\n"
+	"float ch(ivec2 p, int c) {\n"
+	"  ivec4 v = texelFetch(featq, ivec2(p.x * 12 + c / 4, p.y), 0);\n"
+	"  int k = c - (c / 4) * 4;\n"
+	"  int q = k == 0 ? v.x : (k == 1 ? v.y : (k == 2 ? v.z : v.w));\n"
+	"  return (float(q) - zp) * scale;\n"
 	"}\n"
 	"void main() {\n"
 	"  ivec2 q = ivec2(gl_FragCoord.xy);\n"
@@ -90,6 +117,19 @@ static bool init(void) {
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	if (!ok) return false;
 	glGenVertexArrays(1, &vao);
+
+	prog_q = glCreateProgram();
+	glAttachShader(prog_q, compile(GL_VERTEX_SHADER, VS));
+	glAttachShader(prog_q, compile(GL_FRAGMENT_SHADER, FS_Q));
+	glLinkProgram(prog_q);
+	glGetProgramiv(prog_q, GL_LINK_STATUS, &ok);
+	if (!ok) return false;
+	locq_feat = glGetUniformLocation(prog_q, "featq");
+	locq_src = glGetUniformLocation(prog_q, "src");
+	locq_scale = glGetUniformLocation(prog_q, "scale");
+	locq_zp = glGetUniformLocation(prog_q, "zp");
+	featq_tex = tex(W * CH / 4, H, GL_RGBA8I, GL_RGBA_INTEGER, GL_BYTE);
+	src_tex = tex(W, H, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE);
 	ready = true;
 	return true;
 }
@@ -171,8 +211,47 @@ unsigned npu_compose(const float* features, unsigned src_tex) {
 	return out_tex;
 }
 
+unsigned npu_compose_frame(const void* raw, int type, float scale, int zp, const uint32_t* frame) {
+	if (!init()) return 0;
+	// El cuadro original que corresponde a esta salida (con la NPU en paralelo va un cuadro atrás)
+	glBindTexture(GL_TEXTURE_2D, src_tex);
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, W, H, GL_RGBA, GL_UNSIGNED_BYTE, frame);
+	if (type != NPU_I8) return npu_compose(npu_dequant(raw, type, scale, zp), src_tex);
+
+	glBindTexture(GL_TEXTURE_2D, featq_tex);
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, W * CH / 4, H, GL_RGBA_INTEGER, GL_BYTE, raw);
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+
+	glDisable(GL_SCISSOR_TEST);
+	glDisable(GL_BLEND);
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_STENCIL_TEST);
+	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+	glViewport(0, 0, W * 4, H * 4);
+	glUseProgram(prog_q);
+	glBindVertexArray(vao);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, featq_tex);
+	glUniform1i(locq_feat, 0);
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, src_tex);
+	glUniform1i(locq_src, 1);
+	glUniform1f(locq_scale, scale);
+	glUniform1f(locq_zp, (float) zp);
+	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+	glBindVertexArray(0);
+	glActiveTexture(GL_TEXTURE0);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	return out_tex;
+}
+
 void npu_gl_deinit(void) {
 	if (!ready) return;
+	glDeleteProgram(prog_q);
+	glDeleteTextures(1, &featq_tex);
+	glDeleteTextures(1, &src_tex);
 	glDeleteProgram(prog);
 	glDeleteTextures(1, &feat_tex);
 	glDeleteTextures(1, &out_tex);
