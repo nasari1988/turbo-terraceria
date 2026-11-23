@@ -109,10 +109,20 @@ class NpuUpscaler private constructor(
             }
         }
 
-        /** Prueba en orden: int16 (más precisa), int8 (más rápida), float (solo si la NPU acepta fp16). */
-        fun create(context: Context, notes: MutableList<String>): NpuUpscaler? {
+        /** Modelos en orden de preferencia (los que no existan en assets se saltan). */
+        val MODELS = listOf("student_v3_a8w8", "student_v2_a8w8", "student_v2_a16w8", "student_v2")
+
+        /**
+         * Prueba los modelos en orden de preferencia, saltando los que ya fallaron en este celular ([skip]).
+         * Los que fallen ahora se agregan a [failed]. int16 y float no sirven en el SM8735 (su HTP solo
+         * acelera int8), pero se dejan para otros chips.
+         */
+        fun create(context: Context, notes: MutableList<String>, skip: Set<String>, failed: MutableSet<String>): NpuUpscaler? {
             var first = true
-            for (model in listOf("student_v2_a16w8", "student_v2_a8w8", "student_v2")) {
+            val available = context.assets.list("")?.toSet() ?: emptySet()
+            val order = MODELS.filter { "$it.tflite" in available && it !in skip }
+            if (skip.isNotEmpty()) notes += "se saltan (ya fallaron aquí): " + skip.joinToString()
+            for (model in order) {
                 val up = attempt(context, model, notes)
                 if (first) {
                     first = false
@@ -127,6 +137,7 @@ class NpuUpscaler private constructor(
                     }
                 }
                 if (up != null) return up
+                failed += model
             }
             return null
         }

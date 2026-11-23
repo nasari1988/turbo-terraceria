@@ -30,7 +30,9 @@ print(len(train), "entrenamiento,", len(val), "validación")
 
 P, B = 40, 16
 model = Student()
-opt = torch.optim.Adam(model.parameters(), lr=2e-3)
+import os
+LR = float(os.environ.get("AI_LR", 2e-3))  # redes más anchas necesitan menos (la v3 de 48 canales divergió con 2e-3)
+opt = torch.optim.Adam(model.parameters(), lr=LR)
 
 
 def batch():
@@ -61,13 +63,15 @@ def evaluate():
 
 t0 = time.time()
 for step in range(1, steps + 1):
-    lr_now = 2e-3 * 0.5 * (1 + math.cos(math.pi * step / steps))
+    warm = min(1.0, step / 500)  # arranque suave
+    lr_now = LR * warm * 0.5 * (1 + math.cos(math.pi * step / steps))
     for g in opt.param_groups:
         g["lr"] = lr_now
     x, y = batch()
     loss = F.l1_loss(model(x), y)
     opt.zero_grad()
     loss.backward()
+    torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)  # evita saltos que desestabilizan
     opt.step()
     if step % 250 == 0 or step == steps:
         v, base = evaluate()

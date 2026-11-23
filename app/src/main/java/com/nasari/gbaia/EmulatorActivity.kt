@@ -257,13 +257,15 @@ class EmulatorActivity : Activity() {
             val up = npu ?: run {
                 val notes = mutableListOf<String>()
                 val t0 = System.nanoTime()
+                val failed = mutableSetOf<String>()
                 val created = try {
-                    NpuUpscaler.create(this, notes)
+                    NpuUpscaler.create(this, notes, Settings.npuFailed(this), failed)
                 } catch (e: Throwable) {
                     notes += "error inesperado: ${e.javaClass.simpleName}: ${e.message}"
                     null
                 }
                 notes.forEach { Diag.log("NPU · $it") }
+                Settings.addNpuFailed(this, failed)
                 Diag.npuStatus = if (created != null)
                     "lista con ${created.modelName} (QNN HTP) · %.1f ms por cuadro · preparar todo %.0f ms".format(created.ms, (System.nanoTime() - t0) / 1e6)
                 else "no se pudo usar (ver registro)"

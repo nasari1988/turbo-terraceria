@@ -13,7 +13,16 @@ object Settings {
     /** IA, original exacto (CPU) y resolución interna en la GPU. */
     val SCALES = listOf(AI, NPU, AI_LITE, 0, 2, 4, 6, 8)
 
-    fun scale(context: Context): Int = prefs(context).getInt("escala", AI)
+    /** Por defecto IA en la NPU (si no se puede, el emulador cae solo a IA v2 en GPU). */
+    fun scale(context: Context): Int = prefs(context).getInt("escala", NPU)
+
+    /** Modelos de NPU que ya fallaron en este celular: no se vuelven a probar (arranque rápido). */
+    fun npuFailed(context: Context): Set<String> = prefs(context).getStringSet("npu_fallidos", emptySet())!!.toSet()
+
+    fun addNpuFailed(context: Context, models: Collection<String>) {
+        if (models.isEmpty()) return
+        prefs(context).edit().putStringSet("npu_fallidos", npuFailed(context) + models).apply()
+    }
 
     fun showFps(context: Context): Boolean = prefs(context).getBoolean("fps", false)
 
@@ -24,7 +33,7 @@ object Settings {
     fun scaleLabel(scale: Int): String = when (scale) {
         AI -> "IA 4x v2 (mejor calidad)"
         AI_LITE -> "IA 4x ligera (v1)"
-        NPU -> "IA 4x v2 en NPU (prueba)"
+        NPU -> "IA 4x en NPU (recomendada)"
         0 -> "Original (exacto, CPU)"
         8 -> "8x · 1920×1280 (máxima)"
         else -> "${scale}x · ${240 * scale}×${160 * scale}"
