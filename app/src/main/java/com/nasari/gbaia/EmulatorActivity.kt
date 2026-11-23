@@ -226,7 +226,7 @@ class EmulatorActivity : Activity() {
                     append(usage.line(if (ai || usesNpu(current)) st[0] else -1f, if (usesNpu(current)) npu?.ms ?: -1f else -1f))
                 }
                 // En pausa (menú abierto) se conserva lo último medido jugando
-                if (!paused && frames > 0) Diag.lastStats = detail.replace('\n', ' · ')
+                if (!paused && frames > 0) Diag.lastStats = detail.replace("\n", " · ")
                 runOnUiThread { fpsView.text = detail }
                 frames = 0
                 fpsStart = now
