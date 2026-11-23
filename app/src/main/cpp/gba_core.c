@@ -139,6 +139,10 @@ int gba_run_frame(uint32_t keys, int16_t* audio, int audio_cap) {
 	return n;  // cuadros estéreo
 }
 
+const uint32_t* gba_video_buffer(void) {
+	return (const uint32_t*) video;
+}
+
 void gba_copy_pixels(uint32_t* pixels) {
 	// color_t de mGBA ya es RGBX en memoria; solo forzamos alfa opaco.
 	for (int i = 0; i < GBA_W * GBA_H; ++i) pixels[i] = video[i] | 0xFF000000u;

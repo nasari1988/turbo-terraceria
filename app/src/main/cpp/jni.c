@@ -6,6 +6,7 @@
 #include "ai_gl.h"
 #include "gba_core.h"
 #include "gpu_timer.h"
+#include "npu_gl.h"
 #include "video_gl.h"
 
 #define FN(name) Java_com_nasari_gbaia_Native_##name
@@ -74,6 +75,7 @@ JNIEXPORT void JNICALL FN(stop)(JNIEnv* env, jclass cls) {
 	ai_deinit();
 	ai1_deinit();
 	gpu_timer_reset();
+	npu_gl_deinit();
 	video_set_window(NULL);
 	if (current) ANativeWindow_release(current);
 	current = NULL;
@@ -169,4 +171,33 @@ JNIEXPORT jfloatArray JNICALL FN(stats)(JNIEnv* env, jclass cls) {
 	jfloatArray a = (*env)->NewFloatArray(env, 2);
 	(*env)->SetFloatArrayRegion(env, a, 0, 2, v);
 	return a;
+}
+
+// ---------- Modo NPU (la inferencia la hace LiteRT + QNN en Kotlin) ----------
+
+JNIEXPORT void JNICALL FN(npuFillInput)(JNIEnv* env, jclass cls, jobject buf) {
+	(void) cls;
+	float* in = (*env)->GetDirectBufferAddress(env, buf);
+	if (in) npu_fill_input(gba_video_buffer(), in);
+}
+
+JNIEXPORT jboolean JNICALL FN(npuPresent)(JNIEnv* env, jclass cls, jobject buf) {
+	(void) cls;
+	const float* feat = (*env)->GetDirectBufferAddress(env, buf);
+	if (!feat) return false;
+	sync_window();
+	video_make_current();
+	unsigned src;
+	int w, h;
+	bool smooth;
+	gba_frame_texture(&src, &w, &h, &smooth);  // sube el cuadro original (modo software)
+	unsigned out = npu_compose(feat, src);
+	if (!out) return false;
+	video_present(out, w * 4, h * 4, true);
+	return true;
+}
+
+JNIEXPORT jstring JNICALL FN(glInfo)(JNIEnv* env, jclass cls) {
+	(void) cls;
+	return (*env)->NewStringUTF(env, video_info());
 }

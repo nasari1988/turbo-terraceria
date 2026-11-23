@@ -9,10 +9,10 @@ android {
 
     defaultConfig {
         applicationId = "com.nasari.gbaia"
-        minSdk = 26
+        minSdk = 31 // NPU (LiteRT + QNN) pide Android 12+; el Poco F7 trae Android 15
         targetSdk = 35
-        versionCode = 7
-        versionName = "0.7"
+        versionCode = 8
+        versionName = "0.8"
         ndk {
             abiFilters += "arm64-v8a" // Poco F7
         }
@@ -43,6 +43,18 @@ android {
         }
     }
 
+    // El modelo .tflite se lee mapeado en memoria: no comprimirlo
+    androidResources {
+        noCompress += "tflite"
+    }
+
+    // Las librerías de la NPU de Qualcomm (skel) deben quedar como archivos en nativeLibraryDir
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -50,4 +62,12 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+}
+
+dependencies {
+    // LiteRT (antes TensorFlow Lite), API Interpreter
+    implementation("com.google.ai.edge.litert:litert:1.4.2")
+    // NPU Hexagon de Qualcomm (backend HTP) vía el delegado QNN
+    implementation("com.qualcomm.qti:qnn-runtime:2.50.0")
+    implementation("com.qualcomm.qti:qnn-litert-delegate:2.50.0")
 }

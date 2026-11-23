@@ -7,6 +7,7 @@
 #include <EGL/eglext.h>
 #include <GLES3/gl3.h>
 #include <stdio.h>
+#include <string.h>
 
 #ifndef EGL_OPENGL_ES3_BIT_KHR
 #define EGL_OPENGL_ES3_BIT_KHR 0x40
@@ -18,6 +19,7 @@ static EGLConfig cfg;
 static EGLSurface pbuf = EGL_NO_SURFACE;
 static EGLSurface win = EGL_NO_SURFACE;
 static GLuint prog, vao, loc_tex;
+static char info[1024] = "sin GPU";
 
 static const char* VS =
 	"#version 300 es\n"
@@ -83,6 +85,21 @@ bool video_init(void* native_display) {
 	glAttachShader(prog, compile(GL_FRAGMENT_SHADER, FS));
 	glLinkProgram(prog);
 	loc_tex = glGetUniformLocation(prog, "tex");
+
+	// Datos para el reporte de diagnóstico
+	GLint bufs = 0, ext_n = 0;
+	glGetIntegerv(GL_MAX_DRAW_BUFFERS, &bufs);
+	glGetIntegerv(GL_NUM_EXTENSIONS, &ext_n);
+	bool timer = false, cbf = false;
+	for (GLint i = 0; i < ext_n; ++i) {
+		const char* e = (const char*) glGetStringi(GL_EXTENSIONS, i);
+		if (!e) continue;
+		if (!strcmp(e, "GL_EXT_disjoint_timer_query")) timer = true;
+		if (!strcmp(e, "GL_EXT_color_buffer_float") || !strcmp(e, "GL_EXT_color_buffer_half_float")) cbf = true;
+	}
+	snprintf(info, sizeof(info), "%s | %s | %s | MRT %d | timer %s | float FBO %s",
+		(const char*) glGetString(GL_VENDOR), (const char*) glGetString(GL_RENDERER),
+		(const char*) glGetString(GL_VERSION), bufs, timer ? "sí" : "no", cbf ? "sí" : "no");
 	glGenVertexArrays(1, &vao);
 	return true;
 }
@@ -152,4 +169,8 @@ void video_make_current(void) {
 	if (ctx == EGL_NO_CONTEXT) return;
 	EGLSurface s = win != EGL_NO_SURFACE ? win : pbuf;
 	eglMakeCurrent(dpy, s, s, ctx);
+}
+
+const char* video_info(void) {
+	return info;
 }

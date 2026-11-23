@@ -2,6 +2,7 @@ package com.nasari.gbaia
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.Intent
 import android.graphics.Bitmap
 import android.media.AudioAttributes
 import android.media.AudioFormat
@@ -36,6 +37,9 @@ class EmulatorActivity : Activity() {
     @Volatile private var padKeys = 0
     @Volatile private var axisKeys = 0
     @Volatile private var gpu = true
+    /** Modo de imagen actual (incluye NPU, que el núcleo no conoce). Solo se cambia en el hilo del emulador. */
+    @Volatile private var mode = 0
+    private var npu: NpuUpscaler? = null
     /** Tareas que deben correr en el hilo del emulador (ahí vive el contexto de GPU). */
     private val tasks = java.util.concurrent.ConcurrentLinkedQueue<() -> Unit>()
 
@@ -110,9 +114,16 @@ class EmulatorActivity : Activity() {
     private fun emulate(uri: Uri) {
         gpu = Native.start()
         game.gpu = gpu
+        Diag.glInfo = Native.glInfo()
+        Diag.log("inicio: $gameName · GPU ${if (gpu) "ok" else "no disponible"}")
         try {
             runGame(uri)
+        } catch (e: Throwable) {
+            Diag.log("error: ${e.javaClass.simpleName}: ${e.message}")
+            throw e
         } finally {
+            npu?.close()
+            npu = null
             Native.stop() // guarda la partida y libera la GPU
         }
     }
@@ -125,10 +136,14 @@ class EmulatorActivity : Activity() {
             return
         }
         val savePath = File(saveDir, "$gameName.sav").absolutePath
-        if (!Native.load(rom, savePath, if (gpu) Settings.scale(this) else 0)) {
+        val wanted = if (gpu) Settings.scale(this) else 0
+        if (!Native.load(rom, savePath, if (wanted == Settings.NPU) 0 else wanted)) {
             fail("Este archivo no es un juego de GBA válido")
             return
         }
+        mode = Native.getScale()
+        if (wanted == Settings.NPU) applyMode(Settings.NPU)?.let { msg -> runOnUiThread { toast(msg) } }
+        Diag.log("modo inicial: ${Settings.scaleLabel(mode)}")
 
         val audio = ShortArray(4096 * 2)
         // Respaldo sin GPU
@@ -142,25 +157,31 @@ class EmulatorActivity : Activity() {
         var frames = 0
         var fpsStart = System.nanoTime()
         var slowSeconds = 0
-        var lastScale = Native.getScale()
+        var lastScale = mode
         while (running) {
             val now = System.nanoTime()
             if (now - fpsStart >= 1_000_000_000L) {
                 val fps = frames * 1e9 / (now - fpsStart)
-                val current = Native.getScale()
+                val current = mode
                 val label = Settings.scaleLabel(current)
                 // Respaldo automático: si la IA no va a velocidad completa, bajar a un modo más ligero
                 if (current != lastScale) {
                     slowSeconds = -2 // dar tiempo a que compile los shaders
                     lastScale = current
                 }
-                val measuring = !paused && !fastForward && (current == Settings.AI || current == Settings.AI_LITE)
+                val measuring = !paused && !fastForward &&
+                    (current == Settings.AI || current == Settings.AI_LITE || current == Settings.NPU)
                 slowSeconds = if (measuring && fps < 50) slowSeconds + 1 else minOf(slowSeconds, 0)
                 if (slowSeconds >= 3) {
-                    val fallback = if (current == Settings.AI) Settings.AI_LITE else 8
-                    Native.setScale(fallback)
+                    val fallback = when (current) {
+                        Settings.NPU -> Settings.AI
+                        Settings.AI -> Settings.AI_LITE
+                        else -> 8
+                    }
+                    applyMode(fallback)
                     Settings.setScale(this, fallback)
                     val msg = "La imagen iba lenta (%.0f FPS): cambié a %s".format(fps, Settings.scaleLabel(fallback))
+                    Diag.log("respaldo automático: %s a %.1f FPS -> %s".format(Settings.scaleLabel(current), fps, Settings.scaleLabel(fallback)))
                     runOnUiThread { Toast.makeText(this, msg, Toast.LENGTH_LONG).show() }
                     slowSeconds = -2
                     lastScale = fallback
@@ -171,7 +192,9 @@ class EmulatorActivity : Activity() {
                     append("%.1f FPS · %s".format(fps, label))
                     append("\nnúcleo %.1f ms".format(st[1]))
                     if (ai) append(if (st[0] >= 0) " · IA en GPU %.1f ms (de 16.7)".format(st[0]) else " · IA en GPU: sin medición")
+                    if (current == Settings.NPU) npu?.let { append(" · NPU %.1f ms".format(it.ms)) }
                 }
+                Diag.lastStats = detail.replace('\n', ' ')
                 runOnUiThread { fpsView.text = detail }
                 frames = 0
                 fpsStart = now
@@ -186,16 +209,16 @@ class EmulatorActivity : Activity() {
             val keys = controls.keys or padKeys or axisKeys
             if (fastForward) {
                 // ~3x de velocidad, sin sonido; solo se dibuja el último cuadro
-                Native.runFrame(keys, audio, false)
-                Native.runFrame(keys, audio, false)
-                Native.runFrame(keys, audio, gpu)
+                step(keys, audio, false)
+                step(keys, audio, false)
+                step(keys, audio, true)
                 frames += 3
                 if (!gpu) drawFallback(bitmap, pixels, buffer)
                 val wait = 16_666_667L - (System.nanoTime() - last)
                 if (wait > 0) Thread.sleep(wait / 1_000_000, (wait % 1_000_000).toInt())
                 last = System.nanoTime()
             } else {
-                val n = Native.runFrame(keys, audio, gpu)
+                val n = step(keys, audio, true)
                 frames++
                 if (!gpu) drawFallback(bitmap, pixels, buffer)
                 // La escritura bloqueante del audio marca el ritmo (~59.7 cuadros/s)
@@ -205,6 +228,59 @@ class EmulatorActivity : Activity() {
         }
         track.stop()
         track.release()
+    }
+
+    /** Un cuadro de emulación; con present lo dibuja según el modo (GPU, IA o NPU). */
+    private fun step(keys: Int, audio: ShortArray, present: Boolean): Int {
+        val up = npu
+        if (mode != Settings.NPU || up == null) return Native.runFrame(keys, audio, present && gpu)
+        val n = Native.runFrame(keys, audio, false)
+        if (present) {
+            try {
+                Native.npuFillInput(up.input)
+                up.run()
+                Native.npuPresent(up.output)
+            } catch (e: Throwable) {
+                Diag.npuStatus = "falló al correr: ${e.javaClass.simpleName}: ${e.message}"
+                Diag.log("NPU falló al correr: ${e.message}")
+                applyMode(Settings.AI)
+                Settings.setScale(this, Settings.AI)
+                runOnUiThread { toast("La NPU falló; sigo con IA v2 en GPU") }
+            }
+        }
+        return n
+    }
+
+    /** Cambia el modo de imagen (hilo del emulador). Devuelve un mensaje para mostrar. */
+    private fun applyMode(s: Int): String? {
+        if (s == Settings.NPU) {
+            val up = npu ?: try {
+                val t0 = System.nanoTime()
+                NpuUpscaler.create(this).also {
+                    npu = it
+                    Diag.npuStatus = "lista (QNN HTP) · preparar %.0f ms".format((System.nanoTime() - t0) / 1e6)
+                    Diag.log("NPU lista")
+                }
+            } catch (e: Throwable) {
+                Diag.npuStatus = "no se pudo crear: ${e.javaClass.simpleName}: ${e.message}"
+                Diag.log("NPU no disponible: ${e.javaClass.simpleName}: ${e.message}")
+                null
+            }
+            if (up == null) {
+                Native.setScale(Settings.AI)
+                mode = Native.getScale()
+                Settings.setScale(this, Settings.AI)
+                return "La NPU no se pudo usar (ver reporte); sigo con IA v2 en GPU"
+            }
+            Native.setScale(0) // la NPU trabaja sobre el cuadro exacto
+            mode = Settings.NPU
+            Diag.log("modo -> ${Settings.scaleLabel(mode)}")
+            return Settings.scaleLabel(mode)
+        }
+        Native.setScale(s)
+        mode = Native.getScale()
+        Diag.log("modo -> ${Settings.scaleLabel(mode)}")
+        return "Resolución: " + Settings.scaleLabel(mode)
     }
 
     private fun drawFallback(bitmap: Bitmap, pixels: IntArray, buffer: IntBuffer) {
@@ -272,6 +348,7 @@ class EmulatorActivity : Activity() {
             if (fastForward) "Velocidad normal" else "Avance rápido (3x)",
             if (controls.visibility == View.VISIBLE) "Ocultar controles" else "Mostrar controles",
             if (fpsView.visibility == View.VISIBLE) "Ocultar FPS" else "Mostrar FPS",
+            "Generar reporte",
             "Salir",
         )
         var keepPaused = false
@@ -292,7 +369,11 @@ class EmulatorActivity : Activity() {
                         fpsView.visibility = if (show) View.VISIBLE else View.GONE
                         Settings.setShowFps(this, show)
                     }
-                    7 -> finish()
+                    7 -> {
+                        keepPaused = true
+                        showReport()
+                    }
+                    8 -> finish()
                 }
             }
             .setOnDismissListener {
@@ -317,12 +398,33 @@ class EmulatorActivity : Activity() {
             .setSingleChoiceItems(values.map { Settings.scaleLabel(it) }.toTypedArray(), current) { d, which ->
                 val s = values[which]
                 Settings.setScale(this, s)
-                onEmu {
-                    Native.setScale(s)
-                    "Resolución: " + Settings.scaleLabel(s)
-                }
+                onEmu { applyMode(s) }
                 d.dismiss()
             }
+            .setOnDismissListener {
+                paused = false
+                hideSystemBars()
+            }
+            .show()
+    }
+
+    private fun showReport() {
+        val text = Diag.report(this, gameName, Settings.scaleLabel(mode))
+        AlertDialog.Builder(this)
+            .setTitle("Reporte")
+            .setMessage(text)
+            .setPositiveButton("Compartir") { _, _ ->
+                startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, text)
+                }, "Enviar reporte"))
+            }
+            .setNeutralButton("Copiar") { _, _ ->
+                val cm = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                cm.setPrimaryClip(android.content.ClipData.newPlainText("Reporte GBA IA", text))
+                toast("Reporte copiado")
+            }
+            .setNegativeButton("Cerrar", null)
             .setOnDismissListener {
                 paused = false
                 hideSystemBars()

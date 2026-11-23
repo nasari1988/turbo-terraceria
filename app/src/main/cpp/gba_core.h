@@ -36,5 +36,7 @@ int gba_run_frame(uint32_t keys, int16_t* audio, int audio_cap);
 // Último cuadro: como textura GL (requiere GL) o como píxeles (solo modo software).
 void gba_frame_texture(unsigned* tex, int* w, int* h, bool* smooth);
 void gba_copy_pixels(uint32_t* pixels);
+// Búfer del renderizador por software (240x160, RGBX); válido en modo 0 / IA.
+const uint32_t* gba_video_buffer(void);
 bool gba_save_state(const char* path);
 bool gba_load_state(const char* path);
