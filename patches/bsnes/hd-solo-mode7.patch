@@ -1,0 +1,15 @@
+diff --git a/bsnes/sfc/ppu-fast/ppu.cpp b/bsnes/sfc/ppu-fast/ppu.cpp
+index d7260af..5196b2b 100644
+--- a/bsnes/sfc/ppu-fast/ppu.cpp
++++ b/bsnes/sfc/ppu-fast/ppu.cpp
+@@ -136,8 +136,8 @@ auto PPU::scanline() -> void {
+   if(vcounter() > 0 && vcounter() < vdisp()) {
+     latch.hires |= io.pseudoHires || io.bgMode == 5 || io.bgMode == 6;
+     //supersampling and EXTBG mode are not compatible, so disable supersampling in EXTBG mode //HD:disabled
+-    latch.hd |= /* io.bgMode == 7 && */ hdScale() > 0 /*&& (hdSupersample() == 0*/ /* || io.extbg == 1 */ /*)*/; //HD:deactivated dynamic scale switching for widescreen
+-    latch.ss |= /* io.bgMode == 7 && */ hdScale() > 0 && (hdSupersample() > 1 /* && io.extbg == 0 */ ); //HD:irrelevant, because always used ORed with latch.hd
++    latch.hd |= io.bgMode == 7 && hdScale() > 0 /*&& (hdSupersample() == 0*/ /* || io.extbg == 1 */ /*)*/; //HD:deactivated dynamic scale switching for widescreen
++    latch.ss |= io.bgMode == 7 && hdScale() > 0 && (hdSupersample() > 1 /* && io.extbg == 0 */ ); //HD:irrelevant, because always used ORed with latch.hd
+   }
+ 
+   if(vcounter() == vdisp()) {
