@@ -230,3 +230,9 @@ JNIEXPORT jstring JNICALL FN(glInfo)(JNIEnv* env, jclass cls) {
 	(void) cls;
 	return (*env)->NewStringUTF(env, video_info());
 }
+
+JNIEXPORT jdouble JNICALL FN(fps)(JNIEnv* env, jclass cls) {
+	(void) env;
+	(void) cls;
+	return snes_fps();
+}

@@ -35,9 +35,9 @@ class SnesActivity : Activity() {
 
         /** Escala del Mode 7 en HD: "disable", "2x"… "8x". */
         fun mode7(c: android.content.Context): String =
-            c.getSharedPreferences("snes", android.content.Context.MODE_PRIVATE).getString("mode7", "3x") ?: "3x"
+            c.getSharedPreferences("snes", android.content.Context.MODE_PRIVATE).getString("mode7_v2", "3x") ?: "3x"
         fun setMode7(c: android.content.Context, v: String) =
-            c.getSharedPreferences("snes", android.content.Context.MODE_PRIVATE).edit().putString("mode7", v).apply()
+            c.getSharedPreferences("snes", android.content.Context.MODE_PRIVATE).edit().putString("mode7_v2", v).apply()
         /** Pantalla ancha en escenas de Mode 7: "16:9", "none"… */
         fun wide(c: android.content.Context): String =
             c.getSharedPreferences("snes", android.content.Context.MODE_PRIVATE).getString("ancho", "16:9") ?: "16:9"
@@ -61,6 +61,10 @@ class SnesActivity : Activity() {
     @Volatile private var loaded = false
     private val tasks = java.util.concurrent.ConcurrentLinkedQueue<() -> Unit>()
     private val usage by lazy { Usage(this) }
+
+    /** Escala de Mode 7 bajada solo en esta partida por el respaldo automático (null = la elegida). */
+    @Volatile private var sessionMode7: String? = null
+    private fun currentMode7() = sessionMode7 ?: mode7(this)
 
     private lateinit var romPath: String
     private lateinit var fileName: String
@@ -161,7 +165,7 @@ class SnesActivity : Activity() {
     }
 
     private fun applyOptions() {
-        val m7 = mode7(this)
+        val m7 = currentMode7()
         SnesNative.setOption("bsnes_mode7_scale", m7)
         val w = wide(this)
         SnesNative.setOption("bsnes_mode7_wsMode", if (w == "none" || m7 == "disable") "none" else "Mode 7")
@@ -177,15 +181,19 @@ class SnesActivity : Activity() {
         var fpsStart = System.nanoTime()
         var last = System.nanoTime()
         var slowSeconds = -2
+        // Los juegos europeos (PAL) corren a 50 cuadros/s: eso no es ir lento
+        val target = SnesNative.fps().takeIf { it > 10 } ?: 60.0
+        val region = if (target < 55) "PAL 50 Hz" else "NTSC 60 Hz"
         while (running) {
             val now = System.nanoTime()
             if (now - fpsStart >= 1_000_000_000L) {
                 val fps = frames * 1e9 / (now - fpsStart)
                 // Respaldo automático: el Mode 7 HD se dibuja en el procesador; si no da 60, se baja un nivel
-                slowSeconds = if (!paused && !fastForward && fps < 55) slowSeconds + 1 else minOf(slowSeconds, 0)
-                val idx = MODE7_VALUES.indexOf(mode7(this))
+                slowSeconds = if (!paused && !fastForward && fps < target * 0.92) slowSeconds + 1 else minOf(slowSeconds, 0)
+                val idx = MODE7_VALUES.indexOf(currentMode7())
                 if (slowSeconds >= 3 && idx > 1) {
-                    setMode7(this, MODE7_VALUES[idx - 1])
+                    // Solo para esta partida: la opción guardada no cambia
+                    sessionMode7 = MODE7_VALUES[idx - 1]
                     applyOptions()
                     val msg = "Iba lento (%.0f FPS): Mode 7 baja a %s".format(fps, MODE7_LABELS[idx - 1])
                     Diag.log(msg)
@@ -194,7 +202,7 @@ class SnesActivity : Activity() {
                 }
                 val size = SnesNative.frameSize()
                 val detail = buildString {
-                    append("%.1f FPS · SNES · Mode 7 %s".format(fps, MODE7_LABELS[MODE7_VALUES.indexOf(mode7(this@SnesActivity)).coerceAtLeast(0)]))
+                    append("%.1f FPS (%s) · Mode 7 %s".format(fps, region, MODE7_LABELS[MODE7_VALUES.indexOf(currentMode7()).coerceAtLeast(0)].substringBefore(" (")))
                     append("\nnúcleo %.1f ms · cuadro %d×%d".format(SnesNative.emuMs(), size[0], size[1]))
                     append("\n")
                     append(usage.line(-1f, -1f))
@@ -291,6 +299,7 @@ class SnesActivity : Activity() {
                         AlertDialog.Builder(this).setTitle("Mode 7 en HD")
                             .setSingleChoiceItems(MODE7_LABELS.toTypedArray(), MODE7_VALUES.indexOf(mode7(this))) { d, w ->
                                 setMode7(this, MODE7_VALUES[w])
+                                sessionMode7 = null
                                 onEmu { applyOptions(); "Mode 7: ${MODE7_LABELS[w]}" }
                                 d.dismiss()
                             }

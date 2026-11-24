@@ -38,6 +38,8 @@ object SnesNative {
     @JvmStatic external fun copyFrame(): IntArray?
     @JvmStatic external fun emuMs(): Float
     @JvmStatic external fun sampleRate(): Double
+    /** Cuadros por segundo de la consola: ~60.1 (NTSC) o ~50 (PAL, juegos europeos). */
+    @JvmStatic external fun fps(): Double
     @JvmStatic external fun saveState(path: String): Boolean
     @JvmStatic external fun loadState(path: String): Boolean
     @JvmStatic external fun saveSram(): Boolean
