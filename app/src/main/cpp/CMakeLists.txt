@@ -31,7 +31,7 @@ endif()
 target_compile_options(gbacore PRIVATE -O2)
 
 if(ANDROID)
-	add_library(gbaia SHARED jni.c)
+	add_library(gbaia SHARED jni.c names.c)
 	target_link_libraries(gbaia gbacore android log)
 else()
 	# Prueba en PC: corre una ROM y guarda capturas

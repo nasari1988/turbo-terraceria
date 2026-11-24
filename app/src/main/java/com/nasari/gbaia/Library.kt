@@ -10,11 +10,23 @@ data class Game(val path: String, val system: String) {
     val rawName: String get() = fileName.substringBeforeLast('.')
     /** Nombre bonito: sin extensión, etiquetas [..] ni (..), guiones bajos como espacios. */
     val title: String
-        get() = rawName.replace('_', ' ')
+        get() = fixReplacement(rawName).replace('_', ' ')
             .replace(Regex("\\s*\\[[^]]*]"), "")
             .replace(Regex("\\s*\\([^)]*\\)"), "")
             .replace(Regex("\\s+"), " ").trim()
             .ifBlank { rawName }
+}
+
+/** Si el nombre trae "�" (ñ o acento perdido), adivina las palabras comunes; lo demás queda "?". */
+fun fixReplacement(s: String): String {
+    if ('\uFFFD' !in s) return s
+    var r = s
+    for ((bad, good) in listOf(
+        "Espa\uFFFDol" to "Español", "espa\uFFFDol" to "español", "ESPA\uFFFDOL" to "ESPAÑOL",
+        "Edici\uFFFDn" to "Edición", "edici\uFFFDn" to "edición", "Versi\uFFFDn" to "Versión", "versi\uFFFDn" to "versión",
+        "Pok\uFFFDmon" to "Pokémon", "POK\uFFFDMON" to "POKÉMON", "Espa\uFFFDa" to "España", "Mu\uFFFDeco" to "Muñeco",
+    )) r = r.replace(bad, good)
+    return r.replace('\uFFFD', '?')
 }
 
 /** Busca los juegos en la carpeta elegida y los acomoda por consola. */
@@ -33,6 +45,10 @@ object Library {
         cache = list
         return list
     }
+
+    /** Carpetas con archivos de nombre dañado (Java ve "�" y no los puede abrir). */
+    fun brokenDirs(context: Context): List<String> =
+        games(context).filter { '\uFFFD' in it.path }.mapNotNull { File(it.path).parent }.filter { '\uFFFD' !in it }.distinct()
 
     fun bySystem(context: Context): Map<String, List<Game>> =
         games(context).groupBy { it.system }.mapValues { (_, v) -> v.sortedBy { it.title.lowercase() } }

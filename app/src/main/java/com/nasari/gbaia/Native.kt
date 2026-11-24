@@ -49,6 +49,8 @@ object Native {
     ): Boolean
     /** Modo híbrido: activa la máscara Mode 7 (requiere el renderizador de GPU, escala 8). */
     @JvmStatic external fun hybridSet(on: Boolean): Boolean
+    /** Nombres de archivo con ñ/acentos dañados en [dir]: cuenta (apply=false) o los corrige. */
+    @JvmStatic external fun fixNames(dir: String, apply: Boolean): Int
     /** Modo híbrido: teñir las zonas 8x y bajar a 1x cuando el juego no usa Mode 7. */
     @JvmStatic external fun hybridOptions(showMask: Boolean, automatic: Boolean)
     /** Modo híbrido: [líneas con Mode 7, modos de video vistos (bits), escala actual]. */

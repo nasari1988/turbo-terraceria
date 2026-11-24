@@ -10,6 +10,7 @@
 #include "npu_gl.h"
 #include "hybrid_gl.h"
 #include "video_gl.h"
+#include "names.h"
 
 #define FN(name) Java_com_nasari_gbaia_Native_##name
 
@@ -273,4 +274,13 @@ JNIEXPORT jboolean JNICALL FN(hybridPresent)(JNIEnv* env, jclass cls, jint slot,
 	int s = hybrid_scale();
 	video_present(out, GBA_W * s, GBA_H * s, false);
 	return true;
+}
+
+// Nombres de archivo dañados (ñ en CP850/Latin-1): cuenta o renombra a UTF-8 los de un directorio
+JNIEXPORT jint JNICALL FN(fixNames)(JNIEnv* env, jclass cls, jstring dir, jboolean apply) {
+	(void) cls;
+	const char* d = (*env)->GetStringUTFChars(env, dir, NULL);
+	int n = names_fix_dir(d, apply);
+	(*env)->ReleaseStringUTFChars(env, dir, d);
+	return n;
 }

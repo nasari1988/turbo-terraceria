@@ -41,6 +41,7 @@ class LauncherActivity : PickActivity() {
     private var games: List<Game> = emptyList()
     private var carousel: CarouselView? = null
     private var scanning = false
+    private var askedNames = false
 
     // Vistas de la pantalla actual que cambian con la selección
     private var infoUpdate: (() -> Unit)? = null
@@ -81,12 +82,37 @@ class LauncherActivity : PickActivity() {
             scanning = true
             thread(name = "buscar-juegos") {
                 Library.scan(this)
+                val dirs = Library.brokenDirs(this)
+                val broken = dirs.sumOf { Native.fixNames(it, false) }
                 runOnUiThread {
                     scanning = false
                     loadLibrary(rescan = false)
+                    if (broken > 0 && !askedNames) {
+                        askedNames = true
+                        offerFixNames(dirs, broken)
+                    }
                 }
             }
         }
+    }
+
+    /** Archivos con la ñ o acentos dañados en el nombre: así no se pueden abrir. */
+    private fun offerFixNames(dirs: List<String>, count: Int) {
+        AlertDialog.Builder(this)
+            .setTitle("Nombres con la ñ dañada")
+            .setMessage("Encontré $count ${if (count == 1) "archivo" else "archivos"} cuyo nombre tiene la ñ o un acento guardado mal (se ve como �). Así los emuladores no los pueden abrir.\n\n¿Los corrijo? Solo cambia el nombre del archivo, por ejemplo \"Espa�ol\" → \"Español\".")
+            .setPositiveButton("Corregir") { _, _ ->
+                thread {
+                    val n = dirs.sumOf { Native.fixNames(it, true) }
+                    Library.scan(this)
+                    runOnUiThread {
+                        toast("Corregí $n ${if (n == 1) "nombre" else "nombres"}")
+                        loadLibrary(rescan = false)
+                    }
+                }
+            }
+            .setNegativeButton("Ahora no", null)
+            .show()
     }
 
     // ---------- Fondo ----------

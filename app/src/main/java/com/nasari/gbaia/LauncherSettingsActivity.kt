@@ -105,7 +105,16 @@ class LauncherSettingsActivity : PickActivity() {
                     else { LauncherPrefs.setRomRoot(this, path); rescan() }
                 }
             }), 0)
-        gap(Ui.button(this, "Volver a buscar juegos") { rescan() })
+        gap(LinearLayout(this).apply {
+            addView(Ui.button(context, "Volver a buscar juegos") { rescan() })
+            addView(Ui.button(context, "Corregir nombres con ñ") {
+                thread {
+                    val n = Library.brokenDirs(this@LauncherSettingsActivity).sumOf { Native.fixNames(it, true) }
+                    Library.scan(this@LauncherSettingsActivity)
+                    runOnUiThread { toast(if (n == 0) "No hay nombres dañados" else "Corregí $n nombres"); render() }
+                }
+            }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { leftMargin = dp(8) })
+        })
 
         body.addView(Ui.label(this, "Con qué se abre cada consola").apply { setPadding(0, dp(18), 0, dp(4)) })
         val counts = Library.bySystem(this)
@@ -178,6 +187,7 @@ class LauncherSettingsActivity : PickActivity() {
             }
         }))
         gap(progress)
+        gap(Ui.row(this, "Estado", Covers.status, null))
         gap(Ui.row(this, "Borrar las bajadas", "Se vuelven a bajar al verlas. Las que elegiste de tu galería se quedan", Ui.button(this, "Borrar") {
             File(filesDir, "caratulas").listFiles()?.filter { it.name != "propias" }?.forEach { it.deleteRecursively() }
             File(cacheDir, ".").listFiles()?.filter { it.name.startsWith("indice_") }?.forEach { it.delete() }

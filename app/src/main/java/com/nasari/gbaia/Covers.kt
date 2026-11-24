@@ -24,6 +24,9 @@ object Covers {
     private val main = Handler(Looper.getMainLooper())
     private val pending = HashSet<String>()
     private val retryAfter = HashMap<String, Long>()
+    /** Último estado de la descarga, para mostrarlo en Ajustes › Carátulas. */
+    @Volatile var status: String = "Aún no se ha bajado nada en esta sesión"
+    @Volatile private var lastError: String? = null
     private val indices = HashMap<String, List<String>>()
 
     private val bitmaps = object : LruCache<String, Bitmap>(48 * 1024 * 1024) {
@@ -102,6 +105,7 @@ object Covers {
         val best = bestMatch(g.rawName, names)
         if (best == null) {
             missFile(c, g).writeText("")
+            status = "Sin carátula parecida para: ${g.title}"
             return null
         }
         val repo = sys.thumbs.replace(' ', '_')
@@ -113,6 +117,7 @@ object Covers {
             val bytes = fetch(u) ?: continue
             val out = dlFile(c, g)
             out.writeBytes(bytes)
+            status = "Bajada: $best"
             return out
         }
         return null
@@ -130,18 +135,22 @@ object Covers {
         // 1) listado del servidor de libretro
         fetch("https://thumbnails.libretro.com/${enc(sys.thumbs)}/Named_Boxarts/")?.let { html ->
             names = Regex("href=\"([^\"]+)\\.png\"").findAll(String(html)).map {
-                URLDecoder.decode(it.groupValues[1].replace("+", "%2B"), "UTF-8")
-            }.filter { '/' !in it }.toList().takeIf { it.isNotEmpty() }
+                URLDecoder.decode(it.groupValues[1].replace("+", "%2B"), "UTF-8").substringAfterLast('/')
+            }.filter { it.isNotBlank() }.distinct().toList().takeIf { it.isNotEmpty() }
         }
         // 2) respaldo: el repositorio en GitHub
         if (names == null) {
             val repo = sys.thumbs.replace(' ', '_')
             fetch("https://api.github.com/repos/libretro-thumbnails/$repo/git/trees/master?recursive=1")?.let { json ->
-                names = Regex("\"path\":\"Named_Boxarts/([^\"]+)\\.png\"").findAll(String(json))
+                names = Regex("\"path\"\\s*:\\s*\"Named_Boxarts/([^\"]+)\\.png\"").findAll(String(json))
                     .map { it.groupValues[1].replace("\\u0026", "&").replace("\\\"", "\"") }.toList().takeIf { it.isNotEmpty() }
             }
         }
-        val l = names ?: return null
+        val l = names ?: run {
+            status = "No pude bajar la lista de ${sys.short} (${lastError ?: "sin conexión"})"
+            return null
+        }
+        status = "Lista de ${sys.short}: ${l.size} carátulas"
         cached.writeText(l.joinToString("\n"))
         synchronized(indices) { indices[sys.id] = l }
         return l
@@ -155,12 +164,13 @@ object Covers {
             readTimeout = 15000
             setRequestProperty("User-Agent", "GBA-IA-Launcher")
             try {
-                if (responseCode == 200) inputStream.use { it.readBytes() } else null
+                if (responseCode == 200) inputStream.use { it.readBytes() } else { lastError = "HTTP $responseCode"; null }
             } finally {
                 disconnect()
             }
         }
-    } catch (_: Exception) {
+    } catch (e: Exception) {
+        lastError = e.javaClass.simpleName + (e.message?.let { ": " + it.take(60) } ?: "")
         null
     }
 
