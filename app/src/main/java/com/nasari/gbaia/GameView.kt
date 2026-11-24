@@ -12,7 +12,11 @@ import android.view.SurfaceView
  * Superficie del juego. Normalmente dibuja la GPU desde el código nativo (EGL).
  * Si el celular no tuviera GLES3, se usa [drawFallback] con Canvas.
  */
-class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback {
+class GameView(
+    context: Context,
+    /** A quién se entrega la superficie (GBA por defecto; el SNES usa la suya). */
+    private val onSurface: (android.view.Surface?) -> Unit = { Native.setSurface(it) },
+) : SurfaceView(context), SurfaceHolder.Callback {
     /** true cuando el nativo dibuja con GPU; entonces Canvas no debe tocar la superficie. */
     @Volatile var gpu = true
 
@@ -36,11 +40,11 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback 
         val x = (width - w) / 2
         val y = (height - h) / 2
         synchronized(dst) { dst.set(x, y, x + w, y + h) }
-        if (gpu) Native.setSurface(holder.surface)
+        if (gpu) onSurface(holder.surface)
     }
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
-        if (gpu) Native.setSurface(null)
+        if (gpu) onSurface(null)
         synchronized(lock) { ready = false }
     }
 

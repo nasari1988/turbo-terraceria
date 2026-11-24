@@ -2,8 +2,11 @@ package com.nasari.gbaia
 
 /** Cómo se abre un juego de una consola. */
 sealed class Launcher(val label: String) {
-    /** Nuestro emulador (solo GBA). */
+    /** Nuestro emulador de GBA. */
     object Internal : Launcher("GBA IA (integrado)")
+
+    /** Nuestro emulador de SNES (bsnes-hd con Mode 7 en HD). */
+    object InternalSnes : Launcher("SNES IA (integrado, Mode 7 HD)")
 
     /** RetroArch con un núcleo: ROM y LIBRETRO como extras, con ruta de archivo. */
     class RetroArch(val core: String, coreLabel: String) : Launcher("RetroArch · $coreLabel") {
@@ -61,7 +64,7 @@ object Systems {
         GameSystem(
             "snes", "Super Nintendo", "SNES", listOf("snes", "sfc", "superfamicom", "supernintendo"), setOf("sfc", "smc"),
             "Nintendo - Super Nintendo Entertainment System",
-            listOf(Launcher.RetroArch("snes9x", "Snes9x"), Launcher.RetroArch("bsnes", "bsnes"), Launcher.Any),
+            listOf(Launcher.InternalSnes, Launcher.RetroArch("snes9x", "Snes9x"), Launcher.RetroArch("bsnes", "bsnes"), Launcher.Any),
         ),
         GameSystem(
             "n64", "Nintendo 64", "N64", listOf("n64", "nintendo64"), setOf("n64", "z64", "v64"),

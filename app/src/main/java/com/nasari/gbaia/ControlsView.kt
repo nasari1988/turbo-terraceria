@@ -12,7 +12,13 @@ import kotlin.math.atan2
 import kotlin.math.hypot
 
 /** Controles táctiles semitransparentes con multitáctil y cruceta de 8 direcciones. */
-class ControlsView(context: Context) : View(context) {
+class ControlsView(context: Context, private val snes: Boolean = false) : View(context) {
+    // Bits de cada botón según la consola
+    private val kUp = if (snes) SnesNative.UP else Native.UP
+    private val kDown = if (snes) SnesNative.DOWN else Native.DOWN
+    private val kLeft = if (snes) SnesNative.LEFT else Native.LEFT
+    private val kRight = if (snes) SnesNative.RIGHT else Native.RIGHT
+
     @Volatile var keys = 0
         private set
 
@@ -24,13 +30,15 @@ class ControlsView(context: Context) : View(context) {
         var round = true
     }
 
-    private val a = Btn(Native.A, "A")
-    private val b = Btn(Native.B, "B")
-    private val l = Btn(Native.L, "L").apply { round = false }
-    private val r = Btn(Native.R, "R").apply { round = false }
-    private val select = Btn(Native.SELECT, "SELECT").apply { round = false }
-    private val start = Btn(Native.START, "START").apply { round = false }
-    private val buttons = listOf(a, b, l, r, select, start)
+    private val a = Btn(if (snes) SnesNative.A else Native.A, "A")
+    private val b = Btn(if (snes) SnesNative.B else Native.B, "B")
+    private val bx = Btn(SnesNative.X, "X")
+    private val by = Btn(SnesNative.Y, "Y")
+    private val l = Btn(if (snes) SnesNative.L else Native.L, "L").apply { round = false }
+    private val r = Btn(if (snes) SnesNative.R else Native.R, "R").apply { round = false }
+    private val select = Btn(if (snes) SnesNative.SELECT else Native.SELECT, "SELECT").apply { round = false }
+    private val start = Btn(if (snes) SnesNative.START else Native.START, "START").apply { round = false }
+    private val buttons = if (snes) listOf(a, b, bx, by, l, r, select, start) else listOf(a, b, l, r, select, start)
 
     private var padX = 0f
     private var padY = 0f
@@ -54,8 +62,20 @@ class ControlsView(context: Context) : View(context) {
         padX = u * 0.4f + padR
         padY = h - u * 0.5f - padR
 
-        a.r = u * 0.72f; a.cx = w - u * 1.2f; a.cy = h - u * 3.0f
-        b.r = u * 0.72f; b.cx = w - u * 2.9f; b.cy = h - u * 1.9f
+        if (snes) {
+            // Rombo como en el control de SNES: X arriba, A derecha, B abajo, Y izquierda
+            val cx = w - u * 2.3f
+            val cy = h - u * 2.6f
+            val d = u * 1.15f
+            for (btn in listOf(a, b, bx, by)) btn.r = u * 0.6f
+            bx.cx = cx; bx.cy = cy - d
+            a.cx = cx + d; a.cy = cy
+            b.cx = cx; b.cy = cy + d
+            by.cx = cx - d; by.cy = cy
+        } else {
+            a.r = u * 0.72f; a.cx = w - u * 1.2f; a.cy = h - u * 3.0f
+            b.r = u * 0.72f; b.cx = w - u * 2.9f; b.cy = h - u * 1.9f
+        }
 
         l.rect.set(u * 0.3f, u * 0.3f, u * 2.9f, u * 1.2f)
         r.rect.set(w - u * 2.9f, u * 0.3f, w - u * 0.3f, u * 1.2f)
@@ -78,14 +98,14 @@ class ControlsView(context: Context) : View(context) {
         // 8 sectores de 45°
         val ang = Math.toDegrees(atan2(-dy, dx).toDouble()).let { if (it < 0) it + 360 else it }
         return when (((ang + 22.5) / 45).toInt() % 8) {
-            0 -> Native.RIGHT
-            1 -> Native.RIGHT or Native.UP
-            2 -> Native.UP
-            3 -> Native.LEFT or Native.UP
-            4 -> Native.LEFT
-            5 -> Native.LEFT or Native.DOWN
-            6 -> Native.DOWN
-            else -> Native.RIGHT or Native.DOWN
+            0 -> kRight
+            1 -> kRight or kUp
+            2 -> kUp
+            3 -> kLeft or kUp
+            4 -> kLeft
+            5 -> kLeft or kDown
+            6 -> kDown
+            else -> kRight or kDown
         }
     }
 
@@ -125,8 +145,8 @@ class ControlsView(context: Context) : View(context) {
         c.drawCircle(padX, padY, padR, stroke)
         val arm = padR * 0.62f
         val dirs = listOf(
-            Triple(Native.UP, 0f, -arm), Triple(Native.DOWN, 0f, arm),
-            Triple(Native.LEFT, -arm, 0f), Triple(Native.RIGHT, arm, 0f),
+            Triple(kUp, 0f, -arm), Triple(kDown, 0f, arm),
+            Triple(kLeft, -arm, 0f), Triple(kRight, arm, 0f),
         )
         for ((key, dx, dy) in dirs) {
             fill.color = color((k and key) != 0)

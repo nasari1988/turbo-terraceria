@@ -67,8 +67,15 @@ object Launch {
         }
     }
 
+    /** ¿Lo abre uno de nuestros emuladores? (tiempo jugado, ranuras y fondos con captura) */
+    fun isInternal(l: Launcher) = l == Launcher.Internal || l == Launcher.InternalSnes
+
+    /** Archivo de estado guardado de un juego en nuestro emulador. */
+    fun stateFile(c: Context, g: Game, slot: String): File =
+        if (g.system == "snes") SnesActivity.stateFile(c, g.fileName, slot) else EmulatorActivity.stateFile(c, g.fileName, slot)
+
     fun isAvailable(c: Context, l: Launcher): Boolean = when (l) {
-        Launcher.Internal, Launcher.Any -> true
+        Launcher.Internal, Launcher.InternalSnes, Launcher.Any -> true
         is Launcher.RetroArch -> installedPackage(c, l.packages) != null
         is Launcher.App -> installedPackage(c, l.packages) != null
     }
@@ -81,7 +88,7 @@ object Launch {
     }
 
     /**
-     * Abre el juego. [state]: "auto", "1", "2", "3" o null (solo para el emulador integrado).
+     * Abre el juego. [state]: "auto", "1", "2", "3" o null (solo para los emuladores integrados).
      * Devuelve un mensaje de error o null.
      */
     fun start(c: Context, g: Game, state: String? = null): String? {
@@ -94,6 +101,11 @@ object Launch {
                 data = Uri.fromFile(f)
                 putExtra(EmulatorActivity.EXTRA_PATH, g.path)
                 if (state != null) putExtra(EmulatorActivity.EXTRA_STATE, state)
+            }
+            Launcher.InternalSnes -> Intent(c, SnesActivity::class.java).apply {
+                data = Uri.fromFile(f)
+                putExtra(SnesActivity.EXTRA_PATH, g.path)
+                if (state != null) putExtra(SnesActivity.EXTRA_STATE, state)
             }
             is Launcher.RetroArch -> {
                 val pkg = installedPackage(c, l.packages) ?: return "RetroArch no está instalado"
@@ -127,7 +139,7 @@ object Launch {
         }
         return try {
             c.startActivity(intent)
-            if (l != Launcher.Internal) GameDb.markLaunched(c, g.path)
+            if (!isInternal(l)) GameDb.markLaunched(c, g.path)
             null
         } catch (e: ActivityNotFoundException) {
             "No se pudo abrir con ${l.label}"

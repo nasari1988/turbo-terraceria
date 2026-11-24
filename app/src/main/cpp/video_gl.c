@@ -129,6 +129,15 @@ bool video_set_window(void* native_window) {
 	return true;
 }
 
+static int base_w = VIDEO_W, base_h = VIDEO_H;
+
+void video_set_base(int w, int h) {
+	if (w > 0 && h > 0) {
+		base_w = w;
+		base_h = h;
+	}
+}
+
 void video_present(unsigned tex, int tex_w, int tex_h, bool smooth) {
 	if (win == EGL_NO_SURFACE) return;
 	eglMakeCurrent(dpy, win, win, ctx);
@@ -146,9 +155,9 @@ void video_present(unsigned tex, int tex_w, int tex_h, bool smooth) {
 	glClear(GL_COLOR_BUFFER_BIT);
 
 	// escala entera según la pantalla (no según la textura): 8x en el Poco F7
-	int s = ww / VIDEO_W < wh / VIDEO_H ? ww / VIDEO_W : wh / VIDEO_H;
+	int s = ww / base_w < wh / base_h ? ww / base_w : wh / base_h;
 	if (s < 1) s = 1;
-	int w = VIDEO_W * s, h = VIDEO_H * s;
+	int w = base_w * s, h = base_h * s;
 	glViewport((ww - w) / 2, (wh - h) / 2, w, h);
 
 	glUseProgram(prog);

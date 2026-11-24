@@ -366,11 +366,15 @@ class LauncherActivity : PickActivity() {
             title.text = g.title
             meta.text = "${s.short} · ${g.fileName}"
             lastV.text = GameDb.whenText(GameDb.lastPlayed(this, g.path))
-            val internal = Launch.launcherFor(this, s) == Launcher.Internal
-            timeV.text = if (internal) GameDb.durationText(GameDb.playTime(this, g.path)) else "Solo en GBA IA"
-            modeV.text = if (internal) Settings.scaleLabel(GameDb.mode(this, g.path) ?: Settings.scale(this)).substringBefore(" (")
-                         else Launch.launcherFor(this, s).label
-            playBtn.text = if (internal && EmulatorActivity.stateFile(this, g.fileName, "auto").exists()) "Continuar" else "Jugar"
+            val launcher = Launch.launcherFor(this, s)
+            val internal = Launch.isInternal(launcher)
+            timeV.text = if (internal) GameDb.durationText(GameDb.playTime(this, g.path)) else "Solo en los emuladores integrados"
+            modeV.text = when (launcher) {
+                Launcher.Internal -> Settings.scaleLabel(GameDb.mode(this, g.path) ?: Settings.scale(this)).substringBefore(" (")
+                Launcher.InternalSnes -> "SNES IA · Mode 7 " + SnesActivity.MODE7_LABELS[SnesActivity.MODE7_VALUES.indexOf(SnesActivity.mode7(this)).coerceAtLeast(0)].substringBefore(" (")
+                else -> launcher.label
+            }
+            playBtn.text = if (internal && Launch.stateFile(this, g, "auto").exists()) "Continuar" else "Jugar"
             chip.text = applyWallpaper(s.id, g).label
         }
         c.onSelected = { infoUpdate?.invoke() }
@@ -422,8 +426,8 @@ class LauncherActivity : PickActivity() {
 
     private fun play(g: Game, state: String? = null) {
         val sys = Systems.byId(g.system) ?: return
-        val st = state ?: if (Launch.launcherFor(this, sys) == Launcher.Internal &&
-            EmulatorActivity.stateFile(this, g.fileName, "auto").exists()) "auto" else null
+        val st = state ?: if (Launch.isInternal(Launch.launcherFor(this, sys)) &&
+            Launch.stateFile(this, g, "auto").exists()) "auto" else null
         Launch.start(this, g, st)?.let { toast(it) }
     }
 
@@ -484,7 +488,9 @@ class LauncherActivity : PickActivity() {
 
     private fun showOptions(g: Game) {
         val sys = Systems.byId(g.system) ?: return
-        val internal = Launch.launcherFor(this, sys) == Launcher.Internal
+        val launcher = Launch.launcherFor(this, sys)
+        val internal = launcher == Launcher.Internal
+        val internalAny = Launch.isInternal(launcher)
         val dialog = Dialog(this, android.R.style.Theme_Material_NoActionBar_Fullscreen)
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
         fun reopen() { dialog.dismiss(); showOptions(g) }
@@ -513,6 +519,19 @@ class LauncherActivity : PickActivity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(24), dp(14), dp(24), dp(14))
             addView(Ui.label(context, "Opciones de este juego"))
+            if (launcher == Launcher.InternalSnes) {
+                val cur = SnesActivity.MODE7_VALUES.indexOf(SnesActivity.mode7(context)).coerceAtLeast(0)
+                addView(Ui.row(context, "Mode 7 en HD", "Para todos los juegos de SNES (también se cambia jugando, en el menú)",
+                    Ui.button(context, SnesActivity.MODE7_LABELS[cur] + " ▾") {
+                        AlertDialog.Builder(this@LauncherActivity)
+                            .setTitle("Mode 7 en HD")
+                            .setSingleChoiceItems(SnesActivity.MODE7_LABELS.toTypedArray(), cur) { d, w ->
+                                SnesActivity.setMode7(this@LauncherActivity, SnesActivity.MODE7_VALUES[w])
+                                d.dismiss()
+                                reopen()
+                            }.show()
+                    }), Ui.lp(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(10) })
+            }
             if (internal) {
                 val own = GameDb.mode(context, g.path)
                 val label = if (own == null) "Igual que la app (${Settings.scaleLabel(Settings.scale(context)).substringBefore(" (")})" else Settings.scaleLabel(own)
@@ -527,6 +546,8 @@ class LauncherActivity : PickActivity() {
                                 reopen()
                             }.show()
                     }), Ui.lp(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(10) })
+            }
+            if (internalAny) {
                 // Partidas guardadas
                 addView(LinearLayout(context).apply {
                     orientation = LinearLayout.VERTICAL
@@ -535,7 +556,7 @@ class LauncherActivity : PickActivity() {
                     addView(Ui.text(context, "Partidas guardadas (toca para jugar desde ahí)", 14f, Ui.TEXT, bold = true).apply { setPadding(0, 0, 0, dp(8)) })
                     addView(LinearLayout(context).apply {
                         for ((slot, name) in listOf("auto" to "Automática", "1" to "Ranura 1", "2" to "Ranura 2", "3" to "Ranura 3")) {
-                            val f = EmulatorActivity.stateFile(this@LauncherActivity, g.fileName, slot)
+                            val f = Launch.stateFile(this@LauncherActivity, g, slot)
                             addView(LinearLayout(context).apply {
                                 orientation = LinearLayout.VERTICAL
                                 gravity = Gravity.CENTER_VERTICAL
@@ -551,7 +572,8 @@ class LauncherActivity : PickActivity() {
                         }
                     })
                 }, Ui.lp(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(10) })
-            } else {
+            }
+            if (sys.launchers.size > 1) {
                 addView(Ui.row(context, "Emulador", "Se cambia para toda la consola ${sys.short}",
                     Ui.button(context, Launch.launcherFor(context, sys).label + " ▾") { chooseLauncher(sys) { reopen() } }),
                     Ui.lp(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(10) })
@@ -564,7 +586,7 @@ class LauncherActivity : PickActivity() {
                     reopen()
                 }, Ui.lp(0, dp(52), 1f).apply { rightMargin = dp(8) })
                 addView(Ui.button(context, "Carátula") { coverMenu(g) { reopen() } }, Ui.lp(0, dp(52), 1f).apply { rightMargin = dp(8) })
-                addView(Ui.button(context, "Controles") { controlsHelp(internal) }, Ui.lp(0, dp(52), 1f).apply { rightMargin = dp(8) })
+                addView(Ui.button(context, "Controles") { controlsHelp(internalAny) }, Ui.lp(0, dp(52), 1f).apply { rightMargin = dp(8) })
                 addView(Ui.button(context, "Fondo") { wallpaperMenu(g) { reopen() } }, Ui.lp(0, dp(52), 1f))
             })
         }
@@ -619,7 +641,7 @@ class LauncherActivity : PickActivity() {
         if (f.exists()) items += "Quitar (usar el de la consola)"
         AlertDialog.Builder(this)
             .setTitle("Fondo de ${g.title}")
-            .setMessage(if (Launch.launcherFor(this, Systems.byId(g.system)!!) == Launcher.Internal)
+            .setMessage(if (Launch.isInternal(Launch.launcherFor(this, Systems.byId(g.system)!!)))
                 "También puedes poner una captura: en el juego, menú › \"Usar como fondo\"." else null)
             .setItems(items.toTypedArray()) { _, w ->
                 when (w) {

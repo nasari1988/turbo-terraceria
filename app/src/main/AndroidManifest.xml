@@ -38,6 +38,15 @@
         <uses-native-library android:name="libcdsprpc.so" android:required="false" />
         <uses-native-library android:name="libOpenCL.so" android:required="false" />
 
+        <!-- Emulador de SNES integrado (bsnes-hd: Mode 7 en HD) -->
+        <activity
+            android:name=".SnesActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode"
+            android:launchMode="singleTask"
+            android:screenOrientation="sensorLandscape"
+            android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen" />
+
         <!-- Launcher propio (carrusel de consolas y juegos) -->
         <activity
             android:name=".LauncherActivity"
