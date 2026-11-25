@@ -184,6 +184,8 @@ class SnesActivity : Activity() {
         // Los juegos europeos (PAL) corren a 50 cuadros/s: eso no es ir lento
         val target = SnesNative.fps().takeIf { it > 10 } ?: 60.0
         val region = if (target < 55) "PAL 50 Hz" else "NTSC 60 Hz"
+        val boost = PerfBoost(this, target)
+        Diag.log("hilo SNES: prioridad alta, PerformanceHint ${if (boost.active) "sí" else "no disponible"}")
         while (running) {
             val now = System.nanoTime()
             if (now - fpsStart >= 1_000_000_000L) {
@@ -203,7 +205,7 @@ class SnesActivity : Activity() {
                 val size = SnesNative.frameSize()
                 val detail = buildString {
                     append("%.1f FPS (%s) · Mode 7 %s".format(fps, region, MODE7_LABELS[MODE7_VALUES.indexOf(currentMode7()).coerceAtLeast(0)].substringBefore(" (")))
-                    append("\nnúcleo %.1f ms · cuadro %d×%d".format(SnesNative.emuMs(), size[0], size[1]))
+                    append("\nnúcleo %.1f ms · cuadro %d×%d · %s".format(SnesNative.emuMs(), size[0], size[1], boost.where()))
                     append("\n")
                     append(usage.line(-1f, -1f))
                 }
@@ -220,6 +222,7 @@ class SnesActivity : Activity() {
                 continue
             }
             val keys = controls.keys or padKeys or axisKeys
+            val work0 = System.nanoTime()
             if (fastForward) {
                 SnesNative.runFrame(keys, audio, false)
                 SnesNative.runFrame(keys, audio, false)
@@ -230,12 +233,14 @@ class SnesActivity : Activity() {
                 last = System.nanoTime()
             } else {
                 val n = SnesNative.runFrame(keys, audio, true)
+                boost.report(System.nanoTime() - work0)
                 frames++
                 // La escritura bloqueante del audio marca el ritmo (~60.1 cuadros/s)
                 if (n > 0) track.write(audio, 0, n * 2)
                 last = System.nanoTime()
             }
         }
+        boost.close()
         track.stop()
         track.release()
     }
