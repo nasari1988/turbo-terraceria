@@ -142,6 +142,45 @@ object GameDb {
         p(c).edit().putLong("tiempo|$path", playTime(c, path) + ms).putLong("ultima|$path", System.currentTimeMillis()).apply()
     }
 
+    /** Pasa los datos de un juego a su nueva ruta (tras renombrar el archivo): preferencias, carátulas, fondo y estados. */
+    fun migrate(c: Context, oldPath: String, newPath: String) {
+        if (oldPath == newPath) return
+        val sp = p(c)
+        val ed = sp.edit()
+        for (k in listOf("ultima", "tiempo", "fav", "modo")) {
+            val all = sp.all
+            val v = all["$k|$oldPath"] ?: continue
+            when (v) {
+                is Long -> ed.putLong("$k|$newPath", v)
+                is Int -> ed.putInt("$k|$newPath", v)
+                is Boolean -> ed.putBoolean("$k|$newPath", v)
+                is String -> ed.putString("$k|$newPath", v)
+                is Float -> ed.putFloat("$k|$newPath", v)
+            }
+            ed.remove("$k|$oldPath")
+        }
+        ed.apply()
+        fun move(from: File, to: File) {
+            if (from.exists() && !to.exists()) from.renameTo(to)
+        }
+        val oh = Covers.hash(oldPath)
+        val nh = Covers.hash(newPath)
+        // Carátulas: propias y bajadas (una carpeta por consola), con sus marcas ".sin"
+        File(c.filesDir, "caratulas").listFiles()?.filter { it.isDirectory }?.forEach { d ->
+            move(File(d, "$oh.png"), File(d, "$nh.png"))
+            move(File(d, "$oh.sin"), File(d, "$nh.sin"))
+        }
+        // Fondo del juego
+        move(Wallpapers.gameFileFor(c, oldPath), Wallpapers.gameFileFor(c, newPath))
+        // Estados guardados (dependen del nombre del archivo)
+        val oldName = oldPath.substringAfterLast('/')
+        val newName = newPath.substringAfterLast('/')
+        for (slot in listOf("auto", "1", "2", "3")) {
+            move(EmulatorActivity.stateFile(c, oldName, slot), EmulatorActivity.stateFile(c, newName, slot))
+            move(SnesActivity.stateFile(c, oldName, slot), SnesActivity.stateFile(c, newName, slot))
+        }
+    }
+
     fun whenText(t: Long): String {
         if (t == 0L) return "Nunca"
         val now = System.currentTimeMillis()

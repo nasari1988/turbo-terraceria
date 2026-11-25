@@ -371,7 +371,8 @@ class LauncherActivity : PickActivity() {
             timeV.text = if (internal) GameDb.durationText(GameDb.playTime(this, g.path)) else "Solo en los emuladores integrados"
             modeV.text = when (launcher) {
                 Launcher.Internal -> Settings.scaleLabel(GameDb.mode(this, g.path) ?: Settings.scale(this)).substringBefore(" (")
-                Launcher.InternalSnes -> "SNES IA · Mode 7 " + SnesActivity.MODE7_LABELS[SnesActivity.MODE7_VALUES.indexOf(SnesActivity.mode7(this)).coerceAtLeast(0)].substringBefore(" (")
+                Launcher.InternalSnes -> "SNES IA · Mode 7 " + SnesActivity.MODE7_LABELS[SnesActivity.MODE7_VALUES.indexOf(SnesActivity.mode7(this)).coerceAtLeast(0)].substringBefore(" (") +
+                    if (SnesActivity.ia(this)) " + IA NPU" else ""
                 else -> launcher.label
             }
             playBtn.text = if (internal && Launch.stateFile(this, g, "auto").exists()) "Continuar" else "Jugar"
@@ -589,6 +590,8 @@ class LauncherActivity : PickActivity() {
                 addView(Ui.button(context, "Controles") { controlsHelp(internalAny) }, Ui.lp(0, dp(52), 1f).apply { rightMargin = dp(8) })
                 addView(Ui.button(context, "Fondo") { wallpaperMenu(g) { reopen() } }, Ui.lp(0, dp(52), 1f))
             })
+            addView(Ui.button(context, "Renombrar archivo") { renameGame(g, dialog) },
+                Ui.lp(MATCH_PARENT, dp(52)).apply { topMargin = dp(8) })
         }
 
         dialog.setContentView(LinearLayout(this).apply {
@@ -603,6 +606,48 @@ class LauncherActivity : PickActivity() {
             w.setDecorFitsSystemWindows(false)
             w.insetsController?.hide(android.view.WindowInsets.Type.systemBars())
         }
+    }
+
+    /** Renombra el archivo del juego (conservando la extensión) y migra sus datos al nuevo nombre. */
+    private fun renameGame(g: Game, optionsDialog: Dialog) {
+        val ext = g.fileName.substringAfterLast('.', "")
+        val input = EditText(this).apply {
+            setText(fixReplacement(g.rawName))
+            setSelection(text.length)
+            setSingleLine(true)
+            setTextColor(Ui.TEXT)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Renombrar archivo")
+            .setMessage(if (ext.isEmpty()) null else "La extensión .$ext se conserva.")
+            .setView(input)
+            .setNegativeButton("Cancelar", null)
+            .setPositiveButton("Renombrar") { _, _ ->
+                val base = input.text.toString().trim()
+                if (base.isEmpty()) { toast("No se pudo renombrar: el nombre está vacío"); return@setPositiveButton }
+                if (base.contains('/')) { toast("No se pudo renombrar: el nombre no puede llevar «/»"); return@setPositiveButton }
+                val newName = if (ext.isEmpty()) base else "$base.$ext"
+                val old = g.file
+                val dest = File(old.parentFile, newName)
+                if (newName == g.fileName) return@setPositiveButton
+                if (dest.exists()) { toast("No se pudo renombrar: ya existe otro archivo con ese nombre"); return@setPositiveButton }
+                if (!old.renameTo(dest)) { toast("No se pudo renombrar el archivo (revisa los permisos de la carpeta)"); return@setPositiveButton }
+                val newPath = dest.absolutePath
+                thread {
+                    try {
+                        GameDb.migrate(this, g.path, newPath)
+                        Library.scan(this)
+                    } catch (e: Exception) {
+                        runOnUiThread { toast("Se renombró, pero no se pudieron migrar todos los datos: ${e.message}") }
+                    }
+                    runOnUiThread {
+                        optionsDialog.dismiss()
+                        toast("Archivo renombrado")
+                        Systems.byId(g.system)?.let { showGames(it, selectPath = newPath) }
+                    }
+                }
+            }
+            .show()
     }
 
     fun chooseLauncher(sys: GameSystem, done: () -> Unit) {

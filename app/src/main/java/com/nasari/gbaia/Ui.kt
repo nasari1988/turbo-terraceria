@@ -10,7 +10,10 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.app.AlertDialog
+import android.widget.GridLayout
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 
 /** Colores y piezas de interfaz del launcher (como en las maquetas). */
@@ -102,6 +105,39 @@ object Ui {
             letterSpacing = 0.08f
             setPadding(0, dp(context, 8), 0, dp(context, 4))
         }
+
+    /**
+     * Menú en cuadrícula de 2 columnas dentro de un AlertDialog (cabe en horizontal sin desplazarse).
+     * Se ejecuta primero la acción y luego se cierra el diálogo, para que el onDismiss vea el estado final.
+     */
+    fun showGridMenu(context: Context, title: String, labels: List<String>, onDismiss: () -> Unit, onPick: (Int) -> Unit) {
+        var dlg: AlertDialog? = null
+        val grid = GridLayout(context).apply {
+            columnCount = 2
+            setPadding(dp(context, 8), dp(context, 4), dp(context, 8), dp(context, 4))
+        }
+        labels.forEachIndexed { i, label ->
+            val b = button(context, label) {
+                onPick(i)
+                dlg?.dismiss()
+            }
+            b.minHeight = dp(context, 48)
+            val p = GridLayout.LayoutParams(GridLayout.spec(GridLayout.UNDEFINED), GridLayout.spec(GridLayout.UNDEFINED, 1f))
+            p.width = 0
+            p.height = dp(context, 48)
+            p.setMargins(dp(context, 4), dp(context, 3), dp(context, 4), dp(context, 3))
+            grid.addView(b, p)
+        }
+        val scroll = ScrollView(context).apply { addView(grid) }
+        val d = AlertDialog.Builder(context)
+            .setTitle(title)
+            .setView(scroll)
+            .setOnDismissListener { onDismiss() }
+            .create()
+        dlg = d
+        d.show()
+        d.window?.setLayout((context.resources.displayMetrics.widthPixels * 0.7f).toInt(), ViewGroup.LayoutParams.WRAP_CONTENT)
+    }
 
     fun lp(w: Int, h: Int, weight: Float = 0f) = LinearLayout.LayoutParams(w, h, weight)
 }

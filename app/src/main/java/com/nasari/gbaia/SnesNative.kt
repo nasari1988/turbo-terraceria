@@ -36,6 +36,22 @@ object SnesNative {
     @JvmStatic external fun frameSize(): IntArray
     /** [ancho, alto, píxeles ARGB…] del último cuadro. */
     @JvmStatic external fun copyFrame(): IntArray?
+    // ---------- IA en NPU (LiteRT + QNN en Kotlin; la GPU arma la imagen) ----------
+    /** En el hilo del emulador: tamaño de entrada del modelo (256x224). */
+    @JvmStatic external fun npuSetSize(w: Int, h: Int)
+    /**
+     * Copia el último cuadro (RGBA) a [frame] si mide 256 de ancho y 216 o 224 de alto; devuelve el alto.
+     * Devuelve 0 si no sirve para la IA (Mode 7 HD, alta resolución, entrelazado).
+     */
+    @JvmStatic external fun copyFrameNpu(frame: java.nio.ByteBuffer): Int
+    /** Llena la entrada de la NPU con [frame] (de [frameH] filas); las filas que sobran repiten la última. */
+    @JvmStatic external fun npuFillInputFrom(input: java.nio.ByteBuffer, type: Int, scale: Float, zp: Int, frame: java.nio.ByteBuffer, frameH: Int)
+    /** Arma y presenta la imagen 4x con la salida de la NPU y su cuadro original. */
+    @JvmStatic external fun npuPresent(output: java.nio.ByteBuffer, type: Int, scale: Float, zp: Int, frame: java.nio.ByteBuffer, frameH: Int): Boolean
+    /** Presenta el último cuadro tal cual, sin correr el núcleo. */
+    @JvmStatic external fun presentPlain()
+    /** ms de GPU del último armado de la IA (-1 = sin dato). */
+    @JvmStatic external fun npuGpuMs(): Float
     @JvmStatic external fun emuMs(): Float
     @JvmStatic external fun sampleRate(): Double
     /** Cuadros por segundo de la consola: ~60.1 (NTSC) o ~50 (PAL, juegos europeos). */

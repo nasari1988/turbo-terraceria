@@ -485,9 +485,7 @@ class EmulatorActivity : Activity() {
             "Salir",
         )
         var keepPaused = false
-        AlertDialog.Builder(this)
-            .setTitle(gameName)
-            .setItems(options) { _, which ->
+        val onPick: (Int) -> Unit = { which ->
                 when (which) {
                     1, 2 -> {
                         keepPaused = true
@@ -527,13 +525,12 @@ class EmulatorActivity : Activity() {
                     10 -> finish()
                 }
             }
-            .setOnDismissListener {
-                if (!keepPaused) {
-                    paused = false
-                    hideSystemBars()
-                }
+        Ui.showGridMenu(this, gameName, options.toList(), onDismiss = {
+            if (!keepPaused) {
+                paused = false
+                hideSystemBars()
             }
-            .show()
+        }, onPick = onPick)
     }
 
     /** Ranuras de guardado 1–3 (y la automática para cargar). */

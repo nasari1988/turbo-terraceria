@@ -44,6 +44,16 @@ class SnesActivity : Activity() {
         fun setWide(c: android.content.Context, v: String) =
             c.getSharedPreferences("snes", android.content.Context.MODE_PRIVATE).edit().putString("ancho", v).apply()
 
+        /** IA 4x en la NPU (Hexagon) para los cuadros normales de 256x224; el Mode 7 HD no la usa. */
+        fun ia(c: android.content.Context): Boolean =
+            c.getSharedPreferences("snes", android.content.Context.MODE_PRIVATE).getBoolean("ia", true)
+        fun setIa(c: android.content.Context, v: Boolean) =
+            c.getSharedPreferences("snes", android.content.Context.MODE_PRIVATE).edit().putBoolean("ia", v).apply()
+
+        private const val KIND_PLAIN = 0
+        private const val KIND_NPU = 1
+        private const val KIND_HD = 2
+
         val MODE7_VALUES = listOf("disable", "2x", "3x", "4x", "6x", "8x")
         val MODE7_LABELS = listOf("Original (sin HD)", "HD 2x", "HD 3x (recomendado)", "HD 4x", "HD 6x (pesado)", "HD 8x (muy pesado)")
     }
@@ -65,6 +75,18 @@ class SnesActivity : Activity() {
     /** Escala de Mode 7 bajada solo en esta partida por el respaldo automático (null = la elegida). */
     @Volatile private var sessionMode7: String? = null
     private fun currentMode7() = sessionMode7 ?: mode7(this)
+
+    // IA en NPU (todo esto se toca solo desde el hilo del emulador, salvo lecturas para el reporte)
+    @Volatile private var npu: NpuUpscaler? = null
+    private val npuExec = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private var npuPending: java.util.concurrent.Future<*>? = null
+    private var npuPendingSlot = 0
+    private var npuSlot = 0
+    private val npuFrameH = IntArray(2)
+    @Volatile private var npuWaitMs = -1f
+    @Volatile private var iaWhy = "todavía no se inicia"
+    /** Qué tipo de imagen se presentó en el último cuadro: normal, con IA o Mode 7 HD. */
+    @Volatile private var lastKind = KIND_PLAIN
 
     private lateinit var romPath: String
     private lateinit var fileName: String
@@ -154,14 +176,149 @@ class SnesActivity : Activity() {
                 val ok = SnesNative.loadState(stateFile(this, fileName, slot).absolutePath)
                 runOnUiThread { toast(if (!ok) "No se pudo cargar la partida" else if (slot == "auto") "Continuando donde te quedaste" else "Ranura $slot cargada") }
             }
+            if (ia(this)) {
+                startNpu()?.let { msg -> runOnUiThread { toast(msg) } }
+            } else {
+                iaWhy = "desactivada en el menú"
+            }
             loop()
         } catch (e: Throwable) {
             Diag.log("error: ${e.javaClass.simpleName}: ${e.message}")
             throw e
         } finally {
             if (loaded) SnesNative.saveState(stateFile(this, fileName, "auto").absolutePath)
+            dropNpu()
+            npuExec.shutdown()
             SnesNative.stop()
         }
+    }
+
+    /** Crea el modelo de la NPU (hilo del emulador). Devuelve un mensaje, o null si todo bien. */
+    private fun startNpu(): String? {
+        val notes = mutableListOf<String>()
+        val failed = mutableSetOf<String>()
+        val t0 = System.nanoTime()
+        SnesNative.npuSetSize(256, 224)
+        var created = try {
+            NpuUpscaler.create(this, notes, Settings.npuFailed(this), failed, NpuUpscaler.MODELS_SNES, 256 * 224 * 4)
+        } catch (e: Throwable) {
+            notes += "error inesperado: ${e.javaClass.simpleName}: ${e.message}"
+            null
+        }
+        // Protección: si el modelo no es de 256x224 el JNI escribiría fuera de los búferes
+        if (created != null) {
+            val bytes = when (created.inType) { 2 -> 2; 0 -> 4; else -> 1 }
+            val obytes = when (created.outType) { 2 -> 2; 0 -> 4; else -> 1 }
+            if (created.inputs[0].capacity() != 256 * 224 * 3 * bytes || created.outputs[0].capacity() != 256 * 224 * 48 * obytes) {
+                notes += "NO SIRVE ${created.modelName}: los tensores no son de 256x224 (entrada ${created.inputs[0].capacity()} B, salida ${created.outputs[0].capacity()} B)"
+                failed += created.modelName
+                created.close()
+                created = null
+            }
+        }
+        notes.forEach { Diag.log("SNES IA · $it") }
+        Settings.addNpuFailed(this, failed)
+        npu = created
+        npuWaitMs = -1f
+        npuPending = null
+        npuSlot = 0
+        return if (created != null) {
+            iaWhy = ""
+            Diag.log("SNES IA lista con ${created.modelName} · %.1f ms por cuadro · preparar todo %.0f ms".format(created.ms, (System.nanoTime() - t0) / 1e6))
+            null
+        } else {
+            iaWhy = "no se pudo usar la NPU, ver registro"
+            Diag.log("SNES IA: no se pudo usar la NPU; sigue sin IA")
+            "La IA en NPU no se pudo usar; sigo sin IA"
+        }
+    }
+
+    /** Espera lo que la NPU tenga a medias (hilo del emulador). */
+    private fun waitNpu() {
+        try {
+            npuPending?.get()
+        } catch (_: Throwable) {
+        }
+        npuPending = null
+    }
+
+    /** Descarta lo pendiente y libera la NPU. */
+    private fun dropNpu() {
+        waitNpu()
+        npu?.close()
+        npu = null
+        npuWaitMs = -1f
+    }
+
+    /** Un cuadro de emulación; con present lo dibuja (con IA si se puede, o tal cual). */
+    private fun stepFrame(keys: Int, audio: ShortArray, present: Boolean): Int {
+        val up = npu
+        if (up == null) {
+            lastKind = KIND_PLAIN
+            return SnesNative.runFrame(keys, audio, present)
+        }
+        val n = SnesNative.runFrame(keys, audio, false)
+        if (present) presentNpu(up)
+        return n
+    }
+
+    private fun presentPlain(kind: Int) {
+        lastKind = kind
+        SnesNative.presentPlain()
+    }
+
+    private fun presentNpu(up: NpuUpscaler) {
+        val slot = npuSlot
+        val h = SnesNative.copyFrameNpu(up.frames[slot])
+        if (h == 0) {
+            // Cuadro HD de Mode 7 (u otro tamaño): se descarta lo pendiente y se muestra tal cual
+            waitNpu()
+            presentPlain(KIND_HD)
+            return
+        }
+        try {
+            // Cuadro N: preparar su entrada y mandarlo a la NPU...
+            npuSlot = 1 - slot
+            npuFrameH[slot] = h
+            SnesNative.npuFillInputFrom(up.inputs[slot], up.inType, up.inScale, up.inZero, up.frames[slot], h)
+            val prev = npuPending
+            val prevSlot = npuPendingSlot
+            npuPending = npuExec.submit { up.run(slot) }
+            npuPendingSlot = slot
+            // ...y mostrar el cuadro N-1, que la NPU procesó mientras el emulador hacía este
+            if (prev == null) {
+                presentPlain(KIND_PLAIN) // primer cuadro tras un cambio: sin IA
+                return
+            }
+            val t0 = System.nanoTime()
+            prev.get()
+            val w = (System.nanoTime() - t0) / 1e6f
+            npuWaitMs = if (npuWaitMs < 0) w else npuWaitMs * 0.9f + w * 0.1f
+            if (SnesNative.npuPresent(up.outputs[prevSlot], up.outType, up.outScale, up.outZero, up.frames[prevSlot], npuFrameH[prevSlot])) {
+                lastKind = KIND_NPU
+            } else {
+                presentPlain(KIND_PLAIN)
+            }
+        } catch (e: Throwable) {
+            val cause = (e as? java.util.concurrent.ExecutionException)?.cause ?: e
+            Diag.log("SNES IA: la NPU falló al correr: ${cause.javaClass.simpleName}: ${cause.message}")
+            iaWhy = "falló al correr: ${cause.javaClass.simpleName}"
+            dropNpu()
+            presentPlain(KIND_PLAIN)
+            runOnUiThread { toast("La NPU falló; sigo sin IA") }
+        }
+    }
+
+    /** Aplica la preferencia "ia" jugando (hilo del emulador). */
+    private fun applyIa(): String {
+        if (!ia(this)) {
+            dropNpu()
+            iaWhy = "desactivada en el menú"
+            lastKind = KIND_PLAIN
+            return "IA en NPU apagada"
+        }
+        if (npu != null) return "IA en NPU activada"
+        return startNpu() ?: "IA en NPU activada"
     }
 
     private fun applyOptions() {
@@ -206,6 +363,10 @@ class SnesActivity : Activity() {
                 val detail = buildString {
                     append("%.1f FPS (%s) · Mode 7 %s".format(fps, region, MODE7_LABELS[MODE7_VALUES.indexOf(currentMode7()).coerceAtLeast(0)].substringBefore(" (")))
                     append("\nnúcleo %.1f ms · cuadro %d×%d · %s".format(SnesNative.emuMs(), size[0], size[1], boost.where()))
+                    when (lastKind) {
+                        KIND_NPU -> append(" · NPU %.1f ms (espera %.1f ms)".format(npu?.ms ?: -1f, npuWaitMs))
+                        KIND_HD -> append(" · Mode 7 HD")
+                    }
                     append("\n")
                     append(usage.line(-1f, -1f))
                 }
@@ -224,15 +385,15 @@ class SnesActivity : Activity() {
             val keys = controls.keys or padKeys or axisKeys
             val work0 = System.nanoTime()
             if (fastForward) {
-                SnesNative.runFrame(keys, audio, false)
-                SnesNative.runFrame(keys, audio, false)
-                SnesNative.runFrame(keys, audio, true)
+                stepFrame(keys, audio, false)
+                stepFrame(keys, audio, false)
+                stepFrame(keys, audio, true)
                 frames += 3
                 val wait = 16_666_667L - (System.nanoTime() - last)
                 if (wait > 0) Thread.sleep(wait / 1_000_000, (wait % 1_000_000).toInt())
                 last = System.nanoTime()
             } else {
-                val n = SnesNative.runFrame(keys, audio, true)
+                val n = stepFrame(keys, audio, true)
                 boost.report(System.nanoTime() - work0)
                 frames++
                 // La escritura bloqueante del audio marca el ritmo (~60.1 cuadros/s)
@@ -292,11 +453,10 @@ class SnesActivity : Activity() {
             if (fpsView.visibility == View.VISIBLE) "Ocultar FPS" else "Mostrar FPS",
             "Generar reporte",
             "Usar como fondo del juego",
+            "IA en NPU: " + if (ia(this)) "sí" else "no",
             "Salir",
         )
-        AlertDialog.Builder(this)
-            .setTitle(fileName)
-            .setItems(options) { _, which ->
+        val onPick: (Int) -> Unit = { which ->
                 when (which) {
                     1, 2 -> { keepPaused = true; showSlots(save = which == 1) }
                     3 -> {
@@ -331,11 +491,14 @@ class SnesActivity : Activity() {
                         val big = if (w < 1000) Bitmap.createScaledBitmap(bmp, w * 4, h * 4, false) else bmp
                         if (Wallpapers.setBitmap(Wallpapers.gameFileFor(this, gameKey), big)) "Listo: es el fondo de este juego" else "No se pudo guardar el fondo"
                     }
-                    10 -> finish()
+                    10 -> {
+                        setIa(this, !ia(this))
+                        onEmu { applyIa() }
+                    }
+                    11 -> finish()
                 }
             }
-            .setOnDismissListener { if (!keepPaused) { paused = false; hideSystemBars() } }
-            .show()
+        Ui.showGridMenu(this, fileName, options.toList(), onDismiss = { if (!keepPaused) { paused = false; hideSystemBars() } }, onPick = onPick)
     }
 
     private fun showSlots(save: Boolean) {
@@ -365,6 +528,11 @@ class SnesActivity : Activity() {
             appendLine("GPU: ${Diag.glInfo}")
             appendLine("Juego: $fileName")
             appendLine("Mode 7: ${mode7(this@SnesActivity)} · ancho: ${wide(this@SnesActivity)}")
+            val up = npu
+            appendLine(
+                if (up != null) "IA: ${up.modelName} · NPU %.1f ms (espera %.1f ms)".format(up.ms, npuWaitMs)
+                else "IA: apagada / no disponible ($iaWhy)"
+            )
             appendLine("Rendimiento: ${Diag.lastStats}")
         }
         AlertDialog.Builder(this)

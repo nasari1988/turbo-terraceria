@@ -20,6 +20,7 @@ class NpuUpscaler private constructor(
     private val interpreter: Interpreter,
     private val delegate: QnnDelegate,
     val modelName: String,
+    frameBytes: Int = 240 * 160 * 4,
 ) {
     // Tipo y cuantización de la entrada/salida (NPU_F32 = 0, NPU_I8 = 1, NPU_I16 = 2 en npu_gl.h)
     val inType: Int
@@ -31,7 +32,7 @@ class NpuUpscaler private constructor(
     // Dos juegos de búferes: mientras la NPU procesa uno, el emulador llena el otro
     val inputs: Array<ByteBuffer>
     val outputs: Array<ByteBuffer>
-    /** Cuadro original (240x160 RGBX) que corresponde a cada búfer, para el residuo. */
+    /** Cuadro original (RGBX; 240x160 en GBA, 256x224 en SNES) que corresponde a cada búfer, para el residuo. */
     val frames: Array<ByteBuffer>
 
     init {
@@ -45,7 +46,7 @@ class NpuUpscaler private constructor(
         outZero = o.quantizationParams().zeroPoint
         inputs = Array(2) { ByteBuffer.allocateDirect(i.numBytes()).order(ByteOrder.nativeOrder()) }
         outputs = Array(2) { ByteBuffer.allocateDirect(o.numBytes()).order(ByteOrder.nativeOrder()) }
-        frames = Array(2) { ByteBuffer.allocateDirect(240 * 160 * 4).order(ByteOrder.nativeOrder()) }
+        frames = Array(2) { ByteBuffer.allocateDirect(frameBytes).order(ByteOrder.nativeOrder()) }
     }
 
     /** Promedio de ms por inferencia. */
@@ -90,14 +91,14 @@ class NpuUpscaler private constructor(
             }
 
         /** Crea el intérprete, lo prueba y solo lo acepta si de verdad va rápido. */
-        private fun attempt(context: Context, model: String, notes: MutableList<String>): NpuUpscaler? {
+        private fun attempt(context: Context, model: String, notes: MutableList<String>, frameBytes: Int): NpuUpscaler? {
             var delegate: QnnDelegate? = null
             var up: NpuUpscaler? = null
             return try {
                 val t0 = System.nanoTime()
                 delegate = QnnDelegate(options(context, model))
                 val itp = Interpreter(loadModel(context, model), Interpreter.Options().addDelegate(delegate))
-                val u = NpuUpscaler(itp, delegate, model)
+                val u = NpuUpscaler(itp, delegate, model, frameBytes)
                 up = u
                 val prep = (System.nanoTime() - t0) / 1e6
                 repeat(4) { u.run() } // calentamiento + medición
@@ -119,18 +120,26 @@ class NpuUpscaler private constructor(
         /** Modelos en orden de preferencia (los que no existan en assets se saltan). */
         val MODELS = listOf("student_v3_a8w8", "student_v2_a8w8", "student_v2_a16w8", "student_v2")
 
+        /** Modelos para SNES (entrada 256x224), en orden de preferencia. */
+        val MODELS_SNES = listOf("student_v3_a8w8_snes")
+
         /**
          * Prueba los modelos en orden de preferencia, saltando los que ya fallaron en este celular ([skip]).
          * Los que fallen ahora se agregan a [failed]. int16 y float no sirven en el SM8735 (su HTP solo
          * acelera int8), pero se dejan para otros chips.
+         * [models] es la lista de modelos a probar y [frameBytes] el tamaño del cuadro original en bytes
+         * (por omisión GBA: 240x160x4; SNES: 256*224*4).
          */
-        fun create(context: Context, notes: MutableList<String>, skip: Set<String>, failed: MutableSet<String>): NpuUpscaler? {
+        fun create(
+            context: Context, notes: MutableList<String>, skip: Set<String>, failed: MutableSet<String>,
+            models: List<String> = MODELS, frameBytes: Int = 240 * 160 * 4,
+        ): NpuUpscaler? {
             var first = true
             val available = context.assets.list("")?.toSet() ?: emptySet()
-            val order = MODELS.filter { "$it.tflite" in available && it !in skip }
+            val order = models.filter { "$it.tflite" in available && it !in skip }
             if (skip.isNotEmpty()) notes += "se saltan (ya fallaron aquí): " + skip.joinToString()
             for (model in order) {
-                val up = attempt(context, model, notes)
+                val up = attempt(context, model, notes, frameBytes)
                 if (first) {
                     first = false
                     // Tras el primer intento la librería ya está cargada: anotar capacidades

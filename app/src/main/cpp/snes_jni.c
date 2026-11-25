@@ -8,6 +8,7 @@
 #include <time.h>
 
 #include "gpu_timer.h"
+#include "npu_gl.h"
 #include "snes_core.h"
 #include "video_gl.h"
 
@@ -82,6 +83,10 @@ JNIEXPORT void JNICALL FN(stop)(JNIEnv* env, jclass cls) {
 		glDeleteTextures(1, &tex);
 		tex = 0;
 		tex_w = tex_h = 0;
+	}
+	if (gl_ok) {
+		video_make_current();
+		npu_gl_deinit();  // texturas de la IA (si se usó); ya no sirven con otro contexto
 	}
 	gpu_timer_reset();
 	video_set_window(NULL);
@@ -160,6 +165,69 @@ JNIEXPORT jint JNICALL FN(runFrame)(JNIEnv* env, jclass cls, jint keys, jshortAr
 	int n = snes_audio(buf, cap);
 	(*env)->ReleaseShortArrayElements(env, audio, buf, 0);
 	return n;
+}
+
+// ---------- IA en NPU (la inferencia la hace LiteRT + QNN en Kotlin) ----------
+
+// Tamaño de entrada del modelo (256x224). Se llama en el hilo del emulador.
+JNIEXPORT void JNICALL FN(npuSetSize)(JNIEnv* env, jclass cls, jint w, jint h) {
+	(void) env;
+	(void) cls;
+	if (!gl_ok) return;
+	video_make_current();
+	npu_set_size(w, h);
+}
+
+// Copia el último cuadro (RGBA, R en el byte bajo, igual que espera npu_fill_input_q) si mide
+// 256 de ancho y 216 o 224 de alto. Devuelve el alto, o 0 si no sirve para la IA
+// (Mode 7 HD más ancho, alta resolución de 512, entrelazado).
+JNIEXPORT jint JNICALL FN(copyFrameNpu)(JNIEnv* env, jclass cls, jobject buf) {
+	(void) cls;
+	int w, h;
+	const uint32_t* px = snes_frame(&w, &h);
+	void* dst = (*env)->GetDirectBufferAddress(env, buf);
+	if (!px || !dst || w != 256 || (h != 216 && h != 224)) return 0;
+	if ((*env)->GetDirectBufferCapacity(env, buf) < (jlong) w * h * 4) return 0;
+	memcpy(dst, px, (size_t) w * h * 4);
+	return h;
+}
+
+JNIEXPORT void JNICALL FN(npuFillInputFrom)(JNIEnv* env, jclass cls, jobject buf, jint type, jfloat scale, jint zp, jobject frameBuf, jint frameH) {
+	(void) cls;
+	void* in = (*env)->GetDirectBufferAddress(env, buf);
+	const uint32_t* frame = (*env)->GetDirectBufferAddress(env, frameBuf);
+	if (in && frame) npu_fill_input_q_h(frame, in, type, scale, zp, frameH);
+}
+
+JNIEXPORT jboolean JNICALL FN(npuPresent)(JNIEnv* env, jclass cls, jobject buf, jint type, jfloat scale, jint zp, jobject frameBuf, jint frameH) {
+	(void) cls;
+	const void* raw = (*env)->GetDirectBufferAddress(env, buf);
+	const void* frame = (*env)->GetDirectBufferAddress(env, frameBuf);
+	if (!raw || !frame || !gl_ok) return false;
+	sync_window();
+	video_make_current();
+	gpu_timer_begin();  // tiempo de GPU para armar la imagen con la salida de la NPU
+	unsigned out = npu_compose_frame_h(raw, type, scale, zp, frame, frameH);
+	gpu_timer_end();
+	if (!out) return false;
+	video_set_base(256, frameH);
+	video_present(out, 256 * 4, frameH * 4, true);
+	return true;
+}
+
+// Presenta el último cuadro tal cual, sin correr el núcleo (cuando no hay IA o el cuadro no sirve para ella).
+JNIEXPORT void JNICALL FN(presentPlain)(JNIEnv* env, jclass cls) {
+	(void) env;
+	(void) cls;
+	sync_window();
+	present();
+}
+
+// [ms de GPU de la IA (-1 = sin dato)]
+JNIEXPORT jfloat JNICALL FN(npuGpuMs)(JNIEnv* env, jclass cls) {
+	(void) env;
+	(void) cls;
+	return gpu_timer_ms();
 }
 
 JNIEXPORT jintArray JNICALL FN(frameSize)(JNIEnv* env, jclass cls) {

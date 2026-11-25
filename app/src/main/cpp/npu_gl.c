@@ -4,10 +4,15 @@
 
 #include <GLES3/gl3.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-#define W 240
-#define H 160
 #define CH 48
+
+// Tamaño de entrada del MODELO (GBA: 240x160; SNES lo cambia con npu_set_size)
+static int W = 240, H = 160;
+// Tamaño con el que se crearon las texturas (0 = aún no hay)
+static int tex_w, tex_h;
 
 static bool ready = false;
 static GLuint prog, feat_tex, out_tex, fbo, vao;
@@ -97,8 +102,61 @@ static GLuint tex(int w, int h, GLenum internal, GLenum format, GLenum type) {
 	return t;
 }
 
+// La textura de salida mide (W*4) x (out_h*4): out_h es el alto del cuadro real (<= H del modelo),
+// así video_present la muestra completa sin tocar coordenadas.
+static int out_w, out_h;
+
+static void free_textures(void) {
+	if (!tex_w) return;
+	glDeleteTextures(1, &featq_tex);
+	glDeleteTextures(1, &src_tex);
+	glDeleteTextures(1, &feat_tex);
+	glDeleteTextures(1, &out_tex);
+	tex_w = tex_h = 0;
+	out_w = out_h = 0;
+}
+
+// Deja lista la textura de salida para un cuadro de frame_h filas.
+static bool ensure_out(int fh) {
+	if (out_w == W && out_h == fh) return true;
+	if (out_w) glDeleteTextures(1, &out_tex);
+	out_tex = tex(W * 4, fh * 4, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE);
+	out_w = W;
+	out_h = fh;
+	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, out_tex, 0);
+	bool ok = glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	return ok;
+}
+
+// Crea (o recrea si cambió el tamaño del modelo) las texturas que dependen de W x H.
+static bool make_textures(void) {
+	if (tex_w == W && tex_h == H) return true;
+	free_textures();
+	feat_tex = tex(W * CH / 4, H, GL_RGBA32F, GL_RGBA, GL_FLOAT);
+	out_tex = tex(W * 4, H * 4, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE);
+	out_w = W;
+	out_h = H;
+	featq_tex = tex(W * CH / 4, H, GL_RGBA8I, GL_RGBA_INTEGER, GL_BYTE);
+	src_tex = tex(W, H, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE);
+	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, out_tex, 0);
+	bool ok = glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	tex_w = W;
+	tex_h = H;
+	return ok;
+}
+
+void npu_set_size(int w, int h) {
+	if (w < 1 || h < 1) return;
+	W = w;
+	H = h;
+}
+
 static bool init(void) {
-	if (ready) return true;
+	if (ready) return make_textures();
 	prog = glCreateProgram();
 	glAttachShader(prog, compile(GL_VERTEX_SHADER, VS));
 	glAttachShader(prog, compile(GL_FRAGMENT_SHADER, FS));
@@ -108,14 +166,7 @@ static bool init(void) {
 	if (!ok) return false;
 	loc_feat = glGetUniformLocation(prog, "feat");
 	loc_src = glGetUniformLocation(prog, "src");
-	feat_tex = tex(W * CH / 4, H, GL_RGBA32F, GL_RGBA, GL_FLOAT);
-	out_tex = tex(W * 4, H * 4, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE);
 	glGenFramebuffers(1, &fbo);
-	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, out_tex, 0);
-	ok = glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	if (!ok) return false;
 	glGenVertexArrays(1, &vao);
 
 	prog_q = glCreateProgram();
@@ -128,10 +179,8 @@ static bool init(void) {
 	locq_src = glGetUniformLocation(prog_q, "src");
 	locq_scale = glGetUniformLocation(prog_q, "scale");
 	locq_zp = glGetUniformLocation(prog_q, "zp");
-	featq_tex = tex(W * CH / 4, H, GL_RGBA8I, GL_RGBA_INTEGER, GL_BYTE);
-	src_tex = tex(W, H, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE);
 	ready = true;
-	return true;
+	return make_textures();
 }
 
 void npu_fill_input(const uint32_t* video, float* in) {
@@ -145,8 +194,24 @@ void npu_fill_input(const uint32_t* video, float* in) {
 }
 
 void npu_fill_input_q(const uint32_t* video, void* in, int type, float scale, int zp) {
+	npu_fill_input_q_h(video, in, type, scale, zp, H);
+}
+
+void npu_fill_input_q_h(const uint32_t* video, void* in, int type, float scale, int zp, int frame_h) {
+	if (frame_h > H) frame_h = H;
+	if (frame_h < 1) return;
 	if (type == NPU_F32) {
-		npu_fill_input(video, in);
+		float* o = in;
+		for (int y = 0; y < H; ++y) {
+			const uint32_t* row = video + (y < frame_h ? y : frame_h - 1) * W;
+			for (int x = 0; x < W; ++x) {
+				uint32_t c = row[x];
+				int i = y * W + x;
+				o[i * 3 + 0] = (c & 0xFF) / 255.0f;
+				o[i * 3 + 1] = ((c >> 8) & 0xFF) / 255.0f;
+				o[i * 3 + 2] = ((c >> 16) & 0xFF) / 255.0f;
+			}
+		}
 		return;
 	}
 	// Tabla: valor cuantizado para cada nivel de 0..255
@@ -158,7 +223,9 @@ void npu_fill_input_q(const uint32_t* video, void* in, int type, float scale, in
 		lut[v] = qi < lo ? lo : (qi > hi ? hi : qi);
 	}
 	for (int i = 0; i < W * H; ++i) {
-		uint32_t c = video[i];
+		// las filas que sobran repiten la última del cuadro
+		int y = i / W;
+		uint32_t c = y < frame_h ? video[i] : video[(frame_h - 1) * W + (i - y * W)];
 		int r = lut[c & 0xFF], g = lut[(c >> 8) & 0xFF], b = lut[(c >> 16) & 0xFF];
 		if (type == NPU_I8) {
 			int8_t* o = (int8_t*) in + i * 3;
@@ -171,31 +238,45 @@ void npu_fill_input_q(const uint32_t* video, void* in, int type, float scale, in
 }
 
 const float* npu_dequant(const void* out, int type, float scale, int zp) {
-	static float buf[W * H * CH];
+	static float* buf;
+	static size_t cap;
 	if (type == NPU_F32) return out;
-	int n = W * H * CH;
+	size_t n = (size_t) W * H * CH;
+	if (cap < n) {
+		float* nb = realloc(buf, n * sizeof(float));
+		if (!nb) return NULL;
+		buf = nb;
+		cap = n;
+	}
 	if (type == NPU_I8) {
 		const int8_t* q = out;
-		for (int i = 0; i < n; ++i) buf[i] = (q[i] - zp) * scale;
+		for (size_t i = 0; i < n; ++i) buf[i] = (q[i] - zp) * scale;
 	} else {
 		const int16_t* q = out;
-		for (int i = 0; i < n; ++i) buf[i] = (q[i] - zp) * scale;
+		for (size_t i = 0; i < n; ++i) buf[i] = (q[i] - zp) * scale;
 	}
 	return buf;
 }
 
+static unsigned compose_h(const float* features, unsigned src_tex, int fh);
+
 unsigned npu_compose(const float* features, unsigned src_tex) {
-	if (!init()) return 0;
+	return compose_h(features, src_tex, H);
+}
+
+// Versión float con alto de cuadro frame_h <= H (se sube solo lo que se usa).
+static unsigned compose_h(const float* features, unsigned src_tex, int fh) {
+	if (!features || !init() || !ensure_out(fh)) return 0;
 	glBindTexture(GL_TEXTURE_2D, feat_tex);
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, W * CH / 4, H, GL_RGBA, GL_FLOAT, features);
+	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, W * CH / 4, fh, GL_RGBA, GL_FLOAT, features);
 
 	glDisable(GL_SCISSOR_TEST);
 	glDisable(GL_BLEND);
 	glDisable(GL_DEPTH_TEST);
 	glDisable(GL_STENCIL_TEST);
 	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-	glViewport(0, 0, W * 4, H * 4);
+	glViewport(0, 0, W * 4, fh * 4);
 	glUseProgram(prog);
 	glBindVertexArray(vao);
 	glActiveTexture(GL_TEXTURE0);
@@ -212,16 +293,21 @@ unsigned npu_compose(const float* features, unsigned src_tex) {
 }
 
 unsigned npu_compose_frame(const void* raw, int type, float scale, int zp, const uint32_t* frame) {
-	if (!init()) return 0;
+	return npu_compose_frame_h(raw, type, scale, zp, frame, H);
+}
+
+unsigned npu_compose_frame_h(const void* raw, int type, float scale, int zp, const void* frame, int fh) {
+	if (!raw || !frame || fh < 1 || fh > H) return 0;
+	if (!init() || !ensure_out(fh)) return 0;
 	// El cuadro original que corresponde a esta salida (con la NPU en paralelo va un cuadro atrás)
 	glBindTexture(GL_TEXTURE_2D, src_tex);
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, W, H, GL_RGBA, GL_UNSIGNED_BYTE, frame);
-	if (type != NPU_I8) return npu_compose(npu_dequant(raw, type, scale, zp), src_tex);
+	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, W, fh, GL_RGBA, GL_UNSIGNED_BYTE, frame);
+	if (type != NPU_I8) return compose_h(npu_dequant(raw, type, scale, zp), src_tex, fh);
 
 	glBindTexture(GL_TEXTURE_2D, featq_tex);
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, W * CH / 4, H, GL_RGBA_INTEGER, GL_BYTE, raw);
+	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, W * CH / 4, fh, GL_RGBA_INTEGER, GL_BYTE, raw);
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
 
 	glDisable(GL_SCISSOR_TEST);
@@ -229,7 +315,7 @@ unsigned npu_compose_frame(const void* raw, int type, float scale, int zp, const
 	glDisable(GL_DEPTH_TEST);
 	glDisable(GL_STENCIL_TEST);
 	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-	glViewport(0, 0, W * 4, H * 4);
+	glViewport(0, 0, W * 4, fh * 4);
 	glUseProgram(prog_q);
 	glBindVertexArray(vao);
 	glActiveTexture(GL_TEXTURE0);
@@ -250,11 +336,8 @@ unsigned npu_compose_frame(const void* raw, int type, float scale, int zp, const
 void npu_gl_deinit(void) {
 	if (!ready) return;
 	glDeleteProgram(prog_q);
-	glDeleteTextures(1, &featq_tex);
-	glDeleteTextures(1, &src_tex);
+	free_textures();
 	glDeleteProgram(prog);
-	glDeleteTextures(1, &feat_tex);
-	glDeleteTextures(1, &out_tex);
 	glDeleteFramebuffers(1, &fbo);
 	glDeleteVertexArrays(1, &vao);
 	ready = false;

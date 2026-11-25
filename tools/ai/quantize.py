@@ -2,7 +2,8 @@
 Genera dos variantes con calibración sobre pixel art:
   - a16w8: pesos int8, activaciones int16 (más precisa)
   - a8w8:  pesos int8, activaciones int8  (más rápida)
-Uso: quantize.py modelo_float.tflite carpeta_calibracion salida_dir"""
+Uso: quantize.py modelo_float.tflite carpeta_calibracion salida_dir [--height 160] [--width 240] [--solo a8w8|a16w8]"""
+import argparse
 import glob
 import os
 import random
@@ -12,14 +13,22 @@ import numpy as np
 from PIL import Image
 from ai_edge_quantizer import quantizer, recipe
 
-src, calib_dir, out_dir = sys.argv[1], sys.argv[2], sys.argv[3]
+ap = argparse.ArgumentParser()
+ap.add_argument("src")
+ap.add_argument("calib_dir")
+ap.add_argument("out_dir")
+ap.add_argument("--height", type=int, default=160)
+ap.add_argument("--width", type=int, default=240)
+ap.add_argument("--solo", choices=["a8w8", "a16w8"], default=None)
+a = ap.parse_args()
+src, calib_dir, out_dir = a.src, a.calib_dir, a.out_dir
 random.seed(3)
 files = sorted(glob.glob(f"{calib_dir}/*.png"))
 random.shuffle(files)
 samples = []
 for f in files:
     im = Image.open(f).convert("RGB")
-    if im.size != (240, 160):
+    if im.size != (a.width, a.height):
         continue
     samples.append({"args_0": (np.asarray(im, dtype=np.float32) / 255)[None]})
     if len(samples) >= 160:
@@ -27,6 +36,8 @@ for f in files:
 print(len(samples), "imágenes de calibración")
 
 for name, rec in [("a16w8", recipe.static_wi8_ai16()), ("a8w8", recipe.static_wi8_ai8())]:
+    if a.solo and name != a.solo:
+        continue
     qt = quantizer.Quantizer(src)
     qt.load_quantization_recipe(rec)
     calib = qt.calibrate({"serving_default": samples})
