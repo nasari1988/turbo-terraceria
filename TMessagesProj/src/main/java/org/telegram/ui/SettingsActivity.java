@@ -817,6 +817,8 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         items.add(SettingCell.Factory.of(10, IconBackgroundColors.PURPLE.top, IconBackgroundColors.PURPLE.bottom, R.drawable.settings_language, getString(R.string.SettingsLanguage), LocaleController.getCurrentLanguageName()));
 
         items.add(UItem.asShadow(null));
+        // NekoMod: acceso directo a Neko Mod
+        items.add(SettingCell.Factory.of(51, 0xFFD1E4FF, 0xFF9EC5FF, R.drawable.msg_fave, getString(R.string.NekoModSettings), getString(R.string.NekoModSettingsAbout)));
         items.add(SettingCell.Factory.of(50, 0xFFD1E4FF, 0xFF9EC5FF, R.drawable.filled_profile_settings, getString(R.string.NekoSettings)));
 
         items.add(UItem.asShadow(null));
@@ -1007,6 +1009,10 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             }
             case 50: {
                 presentSettingFragment(new NekoSettingsActivity());
+                break;
+            }
+            case 51: { // NekoMod
+                presentSettingFragment(new tw.nekomimi.nekogram.settings.NekoModSettingsActivity());
                 break;
             }
             case 24: {

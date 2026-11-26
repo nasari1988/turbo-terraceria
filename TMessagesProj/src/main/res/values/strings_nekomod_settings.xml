@@ -2,7 +2,6 @@
 <resources>
     <string name="NekoModSettings" translatable="false">Neko Mod</string>
     <string name="NekoModSettingsAbout" translatable="false">Apariencia y videos</string>
-    <string name="NekoModAppearance" translatable="false">Apariencia</string>
     <string name="NekoModVideos" translatable="false">Videos</string>
     <string name="NekoModVideoAutoScroll" translatable="false">Auto-scroll de videos</string>
     <string name="NekoModAutoScrollDelay" translatable="false">Espera antes de pasar</string>

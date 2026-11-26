@@ -3,4 +3,6 @@
     <string name="NekoModVideoNext" translatable="false">Siguiente video</string>
     <string name="NekoModVideoCancel" translatable="false">Cancelar</string>
     <string name="NekoModVideoWatchNow" translatable="false">Ver ahora</string>
+    <string name="NekoModAutoScrollOn" translatable="false">Auto-scroll: activado</string>
+    <string name="NekoModAutoScrollOff" translatable="false">Auto-scroll: desactivado</string>
 </resources>
