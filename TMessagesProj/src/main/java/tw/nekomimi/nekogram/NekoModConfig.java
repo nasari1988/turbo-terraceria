@@ -66,6 +66,28 @@ public class NekoModConfig {
     public static boolean fakeWipeHidden = false;     // al usar el código falso, borrar chats ocultos
     public static boolean calculatorDisguise = false; // ícono y pantalla de calculadora
 
+    // ---- Contenido ----
+    public static boolean allowSaveProtected = true;   // copiar/guardar/reenviar en chats con restricción
+    public static boolean saveViewOnce = false;        // guardar fotos/videos de un solo uso al abrirlos
+
+    // ---- Multimedia ----
+    public static final int QUALITY_AUTO = 0;
+    public static final int QUALITY_HIGH = 1;
+    public static final int QUALITY_MEDIUM = 2;
+    public static final int QUALITY_LOW = 3;
+    public static int videoPlaybackQuality = QUALITY_AUTO; // calidad de reproducción preferida
+    public static boolean saveBestQuality = true;      // guardar en galería siempre la mejor calidad
+    public static boolean askQualityOnSave = false;    // mostrar el menú de calidad al guardar
+    public static boolean backgroundPlayback = true;   // seguir con pantalla apagada / en segundo plano
+    public static boolean sendOriginalVideo = false;   // enviar video sin comprimir (no como archivo)
+    public static float defaultVoiceSpeed = 1.0f;      // velocidad por defecto de audios
+    public static String autoDownloadRules = "";       // reglas por chat: "dialogId:mask;..." (mask bits 1=foto 2=video 4=archivo)
+
+    // ---- Descarga masiva ----
+    public static String syncedDialogs = "";           // chats sincronizados (ids separados por coma)
+    public static boolean nightlySync = false;         // sincronizar cada noche con Wi-Fi
+    public static boolean redownloadDeleted = false;   // volver a bajar archivos que borraste de la carpeta
+
     // Estado en memoria (no se guarda): true tras entrar con el código falso
     public static volatile boolean fakeModeActive = false;
     // Estado en memoria: true cuando el usuario desbloqueó los chats ocultos en esta sesión
@@ -119,6 +141,19 @@ public class NekoModConfig {
         fakePasscodeHash = preferences.getString("fakePasscodeHash", "");
         fakeWipeHidden = preferences.getBoolean("fakeWipeHidden", false);
         calculatorDisguise = preferences.getBoolean("calculatorDisguise", false);
+
+        allowSaveProtected = preferences.getBoolean("allowSaveProtected", true);
+        saveViewOnce = preferences.getBoolean("saveViewOnce", false);
+        videoPlaybackQuality = preferences.getInt("videoPlaybackQuality", QUALITY_AUTO);
+        saveBestQuality = preferences.getBoolean("saveBestQuality", true);
+        askQualityOnSave = preferences.getBoolean("askQualityOnSave", false);
+        backgroundPlayback = preferences.getBoolean("backgroundPlayback", true);
+        sendOriginalVideo = preferences.getBoolean("sendOriginalVideo", false);
+        defaultVoiceSpeed = preferences.getFloat("defaultVoiceSpeed", 1.0f);
+        autoDownloadRules = preferences.getString("autoDownloadRules", "");
+        syncedDialogs = preferences.getString("syncedDialogs", "");
+        nightlySync = preferences.getBoolean("nightlySync", false);
+        redownloadDeleted = preferences.getBoolean("redownloadDeleted", false);
     }
 
     public static void setBoolean(String key, boolean value) {
@@ -140,6 +175,42 @@ public class NekoModConfig {
         if (preferences == null) return;
         preferences.edit().putString(key, value).apply();
         load();
+    }
+
+    public static void setFloat(String key, float value) {
+        SharedPreferences preferences = prefs();
+        if (preferences == null) return;
+        preferences.edit().putFloat(key, value).apply();
+        load();
+    }
+
+    /** Máscara de descarga automática para un chat, o -1 si no tiene regla propia. */
+    public static int getAutoDownloadMask(long dialogId) {
+        if (autoDownloadRules == null || autoDownloadRules.isEmpty()) return -1;
+        for (String rule : autoDownloadRules.split(";")) {
+            int i = rule.indexOf(':');
+            if (i <= 0) continue;
+            try {
+                if (Long.parseLong(rule.substring(0, i)) == dialogId) return Integer.parseInt(rule.substring(i + 1));
+            } catch (NumberFormatException ignore) { }
+        }
+        return -1;
+    }
+
+    public static void setAutoDownloadMask(long dialogId, int mask) {
+        StringBuilder sb = new StringBuilder();
+        if (autoDownloadRules != null) {
+            for (String rule : autoDownloadRules.split(";")) {
+                if (rule.isEmpty() || rule.startsWith(dialogId + ":")) continue;
+                if (sb.length() > 0) sb.append(';');
+                sb.append(rule);
+            }
+        }
+        if (mask >= 0) {
+            if (sb.length() > 0) sb.append(';');
+            sb.append(dialogId).append(':').append(mask);
+        }
+        setString("autoDownloadRules", sb.toString());
     }
 
     // ---- utilidades para listas de ids guardadas como "1,2,3" ----
