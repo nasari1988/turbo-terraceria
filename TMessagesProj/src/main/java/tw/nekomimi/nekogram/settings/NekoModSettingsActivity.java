@@ -20,6 +20,23 @@ public class NekoModSettingsActivity extends BaseNekoSettingsActivity {
     private static final int[] DELAYS = {0, 1, 2, 3, 5, 10};
 
     private final int selfTestRow = rowId++; // NekoMod: autodiagnóstico
+    // NekoMod: filas de privacidad (etapa 2)
+    private final int keepDeletedRow = rowId++;
+    private final int keepEditsRow = rowId++;
+    private final int ghostModeRow = rowId++;
+    private final int ghostNoReadRow = rowId++;
+    private final int ghostNoTypingRow = rowId++;
+    private final int ghostNoOnlineRow = rowId++;
+    private final int ghostNoStoriesRow = rowId++;
+    private final int ghostReadOnReplyRow = rowId++;
+    private final int relockModeRow = rowId++;
+    private final int changePinRow = rowId++;
+    private final int fakeSetupRow = rowId++;
+    private final int fakeRemoveRow = rowId++;
+    private final int fakeWipeRow = rowId++;
+    private final int calcCodeRow = rowId++;
+    private final int calcDisguiseRow = rowId++;
+
     private final int videoAutoScrollRow = rowId++;
     private final int autoScrollDelayRow = rowId++;
     private final int autoScrollGifsRow = rowId++;
@@ -41,6 +58,60 @@ public class NekoModSettingsActivity extends BaseNekoSettingsActivity {
 
     private final int glassBarsRow = rowId++;
     private final int animationSpeedRow = rowId++;
+
+    // NekoMod
+    private static String relockLabel(int mode) {
+        return LocaleController.getString(mode == NekoModConfig.RELOCK_ALWAYS ? R.string.NekoModRelockAlways : R.string.NekoModRelockExit);
+    }
+
+    // NekoMod: ¿hay código de calculadora configurado?
+    private static boolean hasCalcCode() {
+        android.content.SharedPreferences sp = org.telegram.messenger.ApplicationLoader.applicationContext.getSharedPreferences("nekomodconfig", android.app.Activity.MODE_PRIVATE);
+        return !sp.getString("calcCodeHash", "").isEmpty();
+    }
+
+    // NekoMod: pide el código de la calculadora (4-8 dígitos); onSaved se ejecuta tras guardarlo
+    private void askCalcCode(Runnable onSaved) {
+        final android.content.Context ctx = getParentActivity();
+        if (ctx == null) return;
+        final android.widget.EditText edit = new android.widget.EditText(ctx);
+        edit.setHint(LocaleController.getString(R.string.NekoModCalcCodeHint));
+        edit.setSingleLine(true);
+        edit.setInputType(android.text.InputType.TYPE_CLASS_NUMBER | android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD);
+        edit.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(8)});
+        android.widget.FrameLayout box = new android.widget.FrameLayout(ctx);
+        box.addView(edit, org.telegram.ui.Components.LayoutHelper.createFrame(org.telegram.ui.Components.LayoutHelper.MATCH_PARENT, org.telegram.ui.Components.LayoutHelper.WRAP_CONTENT, android.view.Gravity.CENTER, 24, 0, 24, 0));
+        showDialog(new org.telegram.ui.ActionBar.AlertDialog.Builder(ctx)
+                .setTitle(LocaleController.getString(R.string.NekoModCalcCodeTitle))
+                .setView(box)
+                .setPositiveButton(LocaleController.getString(R.string.NekoModCalcAccept), (d, w) -> {
+                    String digits = edit.getText().toString();
+                    if (digits.length() < 4 || digits.length() > 8) {
+                        showMessage(R.string.NekoModCalcCodeInvalid);
+                        return;
+                    }
+                    tw.nekomimi.nekogram.nekomod.fake.CalculatorDisguise.setCode(ctx, digits);
+                    BulletinFactory.of(this).createSimpleBulletin(R.raw.done, LocaleController.getString(R.string.NekoModCalcCodeSaved)).show();
+                    if (onSaved != null) onSaved.run();
+                })
+                .setNegativeButton(LocaleController.getString(R.string.NekoModCalcCancel), null)
+                .create());
+    }
+
+    // NekoMod: confirma y activa el disfraz de calculadora
+    private void confirmCalcDisguise() {
+        final android.content.Context ctx = getParentActivity();
+        if (ctx == null) return;
+        showDialog(new org.telegram.ui.ActionBar.AlertDialog.Builder(ctx)
+                .setTitle(LocaleController.getString(R.string.NekoModCalcConfirmTitle))
+                .setMessage(LocaleController.getString(R.string.NekoModCalcConfirm))
+                .setPositiveButton(LocaleController.getString(R.string.NekoModCalcAccept), (d, w) -> {
+                    tw.nekomimi.nekogram.nekomod.fake.CalculatorDisguise.apply(ctx, true);
+                    listView.adapter.update(true);
+                })
+                .setNegativeButton(LocaleController.getString(R.string.NekoModCalcCancel), (d, w) -> listView.adapter.update(true))
+                .create());
+    }
 
     private static String bubbleLabel(int style) {
         return switch (style) {
@@ -78,6 +149,36 @@ public class NekoModSettingsActivity extends BaseNekoSettingsActivity {
     protected void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {
         items.add(UItem.asButton(selfTestRow, R.drawable.msg_info, "Ejecutar diagnóstico").slug("selfTest"));
         items.add(UItem.asShadow(null));
+        // NekoMod: ajustes de privacidad (etapa 2)
+        items.add(UItem.asHeader(LocaleController.getString(R.string.NekoModMessagesHeader)));
+        items.add(UItem.asCheck(keepDeletedRow, LocaleController.getString(R.string.NekoModKeepDeleted)).slug("saveDeletedMessages").setChecked(NekoModConfig.saveDeletedMessages));
+        items.add(UItem.asCheck(keepEditsRow, LocaleController.getString(R.string.NekoModKeepEdits)).slug("saveEditHistory").setChecked(NekoModConfig.saveEditHistory));
+        items.add(UItem.asShadow(null));
+        items.add(UItem.asHeader(LocaleController.getString(R.string.NekoModGhostHeader)));
+        items.add(UItem.asCheck(ghostModeRow, LocaleController.getString(R.string.NekoModGhostMain), LocaleController.getString(R.string.NekoModGhostMainAbout)).slug("ghostMode").setChecked(NekoModConfig.ghostMode));
+        items.add(UItem.asCheck(ghostNoReadRow, LocaleController.getString(R.string.NekoModGhostNoRead)).slug("ghostNoRead").setChecked(NekoModConfig.ghostNoRead));
+        items.add(UItem.asCheck(ghostNoTypingRow, LocaleController.getString(R.string.NekoModGhostNoTyping)).slug("ghostNoTyping").setChecked(NekoModConfig.ghostNoTyping));
+        items.add(UItem.asCheck(ghostNoOnlineRow, LocaleController.getString(R.string.NekoModGhostNoOnline)).slug("ghostNoOnline").setChecked(NekoModConfig.ghostNoOnline));
+        items.add(UItem.asCheck(ghostNoStoriesRow, LocaleController.getString(R.string.NekoModGhostNoStories)).slug("ghostNoStories").setChecked(NekoModConfig.ghostNoStories));
+        items.add(UItem.asCheck(ghostReadOnReplyRow, LocaleController.getString(R.string.NekoModGhostReadOnReply)).slug("ghostReadOnReply").setChecked(NekoModConfig.ghostReadOnReply));
+        items.add(UItem.asShadow(null));
+        items.add(UItem.asHeader(LocaleController.getString(R.string.NekoModLockHeader)));
+        items.add(UItem.asShadow(LocaleController.getString(R.string.NekoModLockInfo)));
+        items.add(TextSettingsCellFactory.of(relockModeRow, LocaleController.getString(R.string.NekoModRelockMode), relockLabel(NekoModConfig.relockMode)).slug("relockMode"));
+        items.add(UItem.asButton(changePinRow, R.drawable.msg_secret, LocaleController.getString(R.string.NekoModChangeHiddenPin)).slug("changeHiddenPin"));
+        items.add(UItem.asShadow(null));
+        items.add(UItem.asHeader(LocaleController.getString(R.string.NekoModFakeHeader)));
+        items.add(UItem.asButton(fakeSetupRow, R.drawable.msg_secret, LocaleController.getString(R.string.NekoModFakeSetup)).slug("fakeSetup"));
+        if (NekoModConfig.fakePasscodeHash != null && !NekoModConfig.fakePasscodeHash.isEmpty()) {
+            items.add(UItem.asButton(fakeRemoveRow, R.drawable.msg_delete, LocaleController.getString(R.string.NekoModFakeRemove)).slug("fakeRemove"));
+        }
+        items.add(UItem.asCheck(fakeWipeRow, LocaleController.getString(R.string.NekoModFakeWipe)).slug("fakeWipeHidden").setChecked(NekoModConfig.fakeWipeHidden));
+        items.add(UItem.asShadow(null));
+        items.add(UItem.asHeader(LocaleController.getString(R.string.NekoModCalcHeader)));
+        items.add(UItem.asButton(calcCodeRow, R.drawable.msg_edit, LocaleController.getString(R.string.NekoModCalcCode)).slug("calcCode"));
+        items.add(UItem.asCheck(calcDisguiseRow, LocaleController.getString(R.string.NekoModCalcShow)).slug("calculatorDisguise").setChecked(NekoModConfig.calculatorDisguise));
+        items.add(UItem.asShadow(null));
+
         items.add(UItem.asHeader(LocaleController.getString(R.string.NekoModVideos)));
         items.add(UItem.asCheck(videoAutoScrollRow, LocaleController.getString(R.string.NekoModVideoAutoScroll)).slug("videoAutoScroll").setChecked(NekoModConfig.videoAutoScroll));
         items.add(TextSettingsCellFactory.of(autoScrollDelayRow, LocaleController.getString(R.string.NekoModAutoScrollDelay), delayLabel(NekoModConfig.autoScrollDelay)).slug("autoScrollDelay"));
@@ -138,6 +239,52 @@ public class NekoModSettingsActivity extends BaseNekoSettingsActivity {
                     })
                     .setNegativeButton("Cerrar", null)
                     .create());
+        } else if (id == keepDeletedRow) {
+            toggle(view, "saveDeletedMessages", !NekoModConfig.saveDeletedMessages);
+        } else if (id == keepEditsRow) {
+            toggle(view, "saveEditHistory", !NekoModConfig.saveEditHistory);
+        } else if (id == ghostModeRow) {
+            toggle(view, "ghostMode", !NekoModConfig.ghostMode);
+        } else if (id == ghostNoReadRow) {
+            toggle(view, "ghostNoRead", !NekoModConfig.ghostNoRead);
+        } else if (id == ghostNoTypingRow) {
+            toggle(view, "ghostNoTyping", !NekoModConfig.ghostNoTyping);
+        } else if (id == ghostNoOnlineRow) {
+            toggle(view, "ghostNoOnline", !NekoModConfig.ghostNoOnline);
+        } else if (id == ghostNoStoriesRow) {
+            toggle(view, "ghostNoStories", !NekoModConfig.ghostNoStories);
+        } else if (id == ghostReadOnReplyRow) {
+            toggle(view, "ghostReadOnReply", !NekoModConfig.ghostReadOnReply);
+        } else if (id == relockModeRow) {
+            ArrayList<String> arrayList = new ArrayList<>();
+            arrayList.add(relockLabel(NekoModConfig.RELOCK_ON_EXIT));
+            arrayList.add(relockLabel(NekoModConfig.RELOCK_ALWAYS));
+            showPopup(arrayList, NekoModConfig.relockMode, item, view, i -> {
+                NekoModConfig.setInt("relockMode", i);
+                listView.adapter.notifyItemChanged(position, PARTIAL);
+            });
+        } else if (id == changePinRow) {
+            tw.nekomimi.nekogram.nekomod.lock.LockActions.changeHiddenPin(this, () ->
+                    BulletinFactory.of(this).createSimpleBulletin(R.raw.done, LocaleController.getString(R.string.NekoModPinSaved)).show());
+        } else if (id == fakeSetupRow) {
+            tw.nekomimi.nekogram.nekomod.fake.FakePasscodeSetup.show(this);
+            listView.adapter.update(true);
+        } else if (id == fakeRemoveRow) {
+            tw.nekomimi.nekogram.nekomod.fake.FakePasscodeSetup.clear();
+            listView.adapter.update(true);
+        } else if (id == fakeWipeRow) {
+            toggle(view, "fakeWipeHidden", !NekoModConfig.fakeWipeHidden);
+        } else if (id == calcCodeRow) {
+            askCalcCode(null);
+        } else if (id == calcDisguiseRow) {
+            if (NekoModConfig.calculatorDisguise) {
+                tw.nekomimi.nekogram.nekomod.fake.CalculatorDisguise.apply(getParentActivity(), false);
+                listView.adapter.update(true);
+            } else if (hasCalcCode()) {
+                confirmCalcDisguise();
+            } else {
+                askCalcCode(this::confirmCalcDisguise);
+            }
         } else if (id == videoAutoScrollRow) {
             NekoModConfig.setBoolean("videoAutoScroll", !NekoModConfig.videoAutoScroll);
             if (view instanceof TextCheckCell) {

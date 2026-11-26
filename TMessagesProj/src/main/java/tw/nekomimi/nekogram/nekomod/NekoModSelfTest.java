@@ -31,6 +31,13 @@ public final class NekoModSelfTest {
         out.add(status + " " + name + (detail == null || detail.isEmpty() ? "" : ": " + detail));
     }
 
+    // NekoMod: convierte {"OK"|"AVISO"|"FALLA", detalle} en una línea
+    private static void addResult(List<String> out, String name, String[] r) {
+        String st = r != null && r.length > 0 ? r[0] : "FALLA";
+        String detail = r != null && r.length > 1 ? r[1] : "sin resultado";
+        add(out, "OK".equals(st) ? OK : "AVISO".equals(st) ? WARN : FAIL, name, detail);
+    }
+
     public static String run(Context context) {
         List<String> out = new ArrayList<>();
 
@@ -102,6 +109,28 @@ public final class NekoModSelfTest {
             add(out, OK, "Auto-scroll de videos", "la tarjeta se crea bien" + (NekoModConfig.videoAutoScroll ? " (activado)" : " (desactivado)"));
         } catch (Throwable e) {
             add(out, FAIL, "Auto-scroll de videos", e.toString());
+        }
+
+        // NekoMod: pruebas de la etapa 2
+        try {
+            addResult(out, "Mensajes borrados y ediciones", tw.nekomimi.nekogram.nekomod.history.HistorySelfTest.run(context));
+        } catch (Throwable e) {
+            add(out, FAIL, "Mensajes borrados y ediciones", e.toString());
+        }
+        try {
+            addResult(out, "Modo fantasma", tw.nekomimi.nekogram.nekomod.ghost.GhostSelfTest.run());
+        } catch (Throwable e) {
+            add(out, FAIL, "Modo fantasma", e.toString());
+        }
+        try {
+            addResult(out, "Candado y chats ocultos", tw.nekomimi.nekogram.nekomod.lock.LockSelfTest.run(context));
+        } catch (Throwable e) {
+            add(out, FAIL, "Candado y chats ocultos", e.toString());
+        }
+        try {
+            addResult(out, "Código falso y calculadora", tw.nekomimi.nekogram.nekomod.fake.FakeSelfTest.run(context));
+        } catch (Throwable e) {
+            add(out, FAIL, "Código falso y calculadora", e.toString());
         }
 
         // 8. Capturador de errores

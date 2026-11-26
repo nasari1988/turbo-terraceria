@@ -39,4 +39,37 @@
     <string name="NekoModAnimNormal" translatable="false">Normales</string>
     <string name="NekoModAnimSmooth" translatable="false">Suaves</string>
     <string name="NekoModAnimOff" translatable="false">Apagadas</string>
+    <string name="NekoModMessagesHeader" translatable="false">Mensajes</string>
+    <string name="NekoModKeepDeleted" translatable="false">Conservar mensajes borrados</string>
+    <string name="NekoModKeepEdits" translatable="false">Guardar historial de ediciones</string>
+    <string name="NekoModGhostHeader" translatable="false">Modo fantasma</string>
+    <string name="NekoModGhostMain" translatable="false">Modo fantasma</string>
+    <string name="NekoModGhostMainAbout" translatable="false">También desde el ícono de fantasma en la lista de chats</string>
+    <string name="NekoModGhostNoRead" translatable="false">No marcar como leído</string>
+    <string name="NekoModGhostNoTyping" translatable="false">Ocultar «escribiendo…»</string>
+    <string name="NekoModGhostNoOnline" translatable="false">No aparecer en línea</string>
+    <string name="NekoModGhostNoStories" translatable="false">Ver historias sin dejar rastro</string>
+    <string name="NekoModGhostReadOnReply" translatable="false">Marcar como leído al responder</string>
+    <string name="NekoModLockHeader" translatable="false">Candado y chats ocultos</string>
+    <string name="NekoModLockInfo" translatable="false">Bloquea u oculta un chat manteniéndolo presionado en la lista; para bloquear una carpeta, mantén presionada su pestaña. Para ver los chats ocultos, mantén presionada la barra superior de la lista de chats.</string>
+    <string name="NekoModRelockMode" translatable="false">Volver a bloquear</string>
+    <string name="NekoModRelockExit" translatable="false">Al salir de la app</string>
+    <string name="NekoModRelockAlways" translatable="false">Cada vez que lo abras</string>
+    <string name="NekoModChangeHiddenPin" translatable="false">Cambiar PIN de chats ocultos</string>
+    <string name="NekoModPinSaved" translatable="false">PIN guardado</string>
+    <string name="NekoModFakeHeader" translatable="false">Código falso</string>
+    <string name="NekoModFakeSetup" translatable="false">Configurar código falso</string>
+    <string name="NekoModFakeRemove" translatable="false">Quitar código falso</string>
+    <string name="NekoModFakeWipe" translatable="false">Borrar chats ocultos al usarlo</string>
+    <string name="NekoModCalcHeader" translatable="false">Disfraz de calculadora</string>
+    <string name="NekoModCalcCode" translatable="false">Código de la calculadora</string>
+    <string name="NekoModCalcShow" translatable="false">Mostrar como calculadora</string>
+    <string name="NekoModCalcCodeTitle" translatable="false">Código de la calculadora</string>
+    <string name="NekoModCalcCodeHint" translatable="false">4 a 8 dígitos</string>
+    <string name="NekoModCalcCodeInvalid" translatable="false">El código debe tener de 4 a 8 dígitos</string>
+    <string name="NekoModCalcCodeSaved" translatable="false">Código guardado</string>
+    <string name="NekoModCalcConfirmTitle" translatable="false">Mostrar como calculadora</string>
+    <string name="NekoModCalcConfirm" translatable="false">El ícono de Neko Mod será reemplazado por una Calculadora. Para entrar escribe tu código y pulsa =. Si lo olvidas, abre «Neko Mod Diagnóstico».</string>
+    <string name="NekoModCalcAccept" translatable="false">Aceptar</string>
+    <string name="NekoModCalcCancel" translatable="false">Cancelar</string>
 </resources>

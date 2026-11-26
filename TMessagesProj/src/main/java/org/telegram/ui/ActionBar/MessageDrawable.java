@@ -347,9 +347,9 @@ public class MessageDrawable extends Drawable {
     private static int nekoModBubbleRadius() {
         switch (tw.nekomimi.nekogram.NekoModConfig.bubbleStyle) {
             case tw.nekomimi.nekogram.NekoModConfig.BUBBLE_SQUARE:
-                return 4;
+                return 3; // NekoMod: más notorio
             case tw.nekomimi.nekogram.NekoModConfig.BUBBLE_IOS:
-                return 18;
+                return 24; // NekoMod: más notorio
             default:
                 return SharedConfig.bubbleRadius;
         }

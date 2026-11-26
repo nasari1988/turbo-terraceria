@@ -247,6 +247,11 @@ public final class LockActions {
         return pin.length() >= 4 && pin.length() <= 8;
     }
 
+    // NekoMod: cambiar/crear el PIN de chats ocultos desde los ajustes
+    public static void changeHiddenPin(final BaseFragment fragment, final Runnable onDone) {
+        askNewPin(fragment, onDone != null ? onDone : () -> { });
+    }
+
     /** Crear el PIN: escribirlo y confirmarlo. Al coincidir se guarda el hash y se ejecuta onDone. */
     private static void askNewPin(final BaseFragment fragment, final Runnable onDone) {
         Context context = fragment.getParentActivity();
