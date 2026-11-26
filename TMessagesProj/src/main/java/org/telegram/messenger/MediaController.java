@@ -1538,7 +1538,8 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         });
         Utilities.globalQueue.postRunnable(() -> {
             try {
-                currentPlaybackSpeed = MessagesController.getGlobalMainSettings().getFloat("playbackSpeed", 1.0f);
+                // NekoMod: velocidad inicial de notas de voz = defaultVoiceSpeed solo si el usuario aun no eligio una
+                currentPlaybackSpeed = MessagesController.getGlobalMainSettings().getFloat("playbackSpeed", tw.nekomimi.nekogram.NekoModConfig.defaultVoiceSpeed > 0 ? tw.nekomimi.nekogram.NekoModConfig.defaultVoiceSpeed : 1.0f);
                 currentMusicPlaybackSpeed = MessagesController.getGlobalMainSettings().getFloat("musicPlaybackSpeed", 1.0f);
                 fastPlaybackSpeed = MessagesController.getGlobalMainSettings().getFloat("fastPlaybackSpeed", 1.8f);
                 fastMusicPlaybackSpeed = MessagesController.getGlobalMainSettings().getFloat("fastMusicPlaybackSpeed", 1.8f);
@@ -2566,11 +2567,34 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         }
     }
 
+    // NekoMod: wake lock parcial para que el audio siga con la pantalla apagada (backgroundPlayback)
+    private PowerManager.WakeLock nekoBgWakeLock;
+
+    private void nekoBackgroundWakeLock(boolean hold) {
+        try {
+            if (hold && tw.nekomimi.nekogram.NekoModConfig.backgroundPlayback) {
+                if (nekoBgWakeLock == null) {
+                    PowerManager pm = (PowerManager) ApplicationLoader.applicationContext.getSystemService(Context.POWER_SERVICE);
+                    nekoBgWakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "telegram:nekomod_bgplay");
+                    nekoBgWakeLock.setReferenceCounted(false);
+                }
+                if (!nekoBgWakeLock.isHeld()) {
+                    nekoBgWakeLock.acquire(3 * 60 * 60 * 1000L);
+                }
+            } else if (nekoBgWakeLock != null && nekoBgWakeLock.isHeld()) {
+                nekoBgWakeLock.release();
+            }
+        } catch (Throwable e) {
+            FileLog.e(e);
+        }
+    }
+
     public void cleanupPlayer(boolean notify, boolean stopService) {
         cleanupPlayer(notify, stopService, false, false);
     }
 
     public void cleanupPlayer(boolean notify, boolean stopService, boolean byVoiceEnd, boolean transferPlayerToPhotoViewer) {
+        nekoBackgroundWakeLock(false); // NekoMod
         if (stopService && restoreMusicPlaylistState()) {
             return;
         }
@@ -3752,6 +3776,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         if ((audioPlayer != null || videoPlayer != null) && isSamePlayingMessage(messageObject)) {
             if (isPaused) {
                 resumeAudio(messageObject);
+                nekoBackgroundWakeLock(canStartMusicPlayerService()); // NekoMod
             }
             if (!SharedConfig.enabledRaiseTo(true)) {
                 startRaiseToEarSensors(raiseChat);
@@ -4216,6 +4241,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                 FileLog.e(e2);
             }
         }
+        nekoBackgroundWakeLock(canStartMusicPlayerService()); // NekoMod
         if (canStartMusicPlayerService()) {
             Intent intent = new Intent(ApplicationLoader.applicationContext, MusicPlayerService.class);
             try {
@@ -4430,6 +4456,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         if (audioPlayer == null && videoPlayer == null || messageObject == null || playingMessageObject == null || !isSamePlayingMessage(messageObject)) {
             return false;
         }
+        nekoBackgroundWakeLock(false); // NekoMod
         stopProgressTimer();
         try {
             if (audioPlayer != null) {

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="NekoModOcrCopyText" translatable="false">Copiar texto</string>
+    <string name="NekoModOcrNoText" translatable="false">No se encontró texto</string>
+    <string name="NekoModOcrRecognizing" translatable="false">Reconociendo texto…</string>
+    <string name="NekoModOcrFailed" translatable="false">No se pudo reconocer el texto</string>
+    <string name="NekoModOcrCopyAll" translatable="false">Copiar todo</string>
+    <string name="NekoModOcrCopied" translatable="false">Texto copiado</string>
+    <string name="NekoModOcrTitle" translatable="false">Texto detectado</string>
+    <string name="NekoModOcrClose" translatable="false">Cerrar</string>
+    <string name="NekoModOcrNoImage" translatable="false">No hay imagen disponible</string>
+</resources>

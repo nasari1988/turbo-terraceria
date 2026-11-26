@@ -747,7 +747,7 @@ public class DownloadController extends BaseController implements NotificationCe
             }
             preset = getCurrentMobilePreset();
         }
-        int mask = preset.mask[index];
+        int mask = nekoChatMask(message.getDialogId(), preset.mask[index]); // NekoMod
         long maxSize;
         if (type == AUTODOWNLOAD_TYPE_AUDIO) {
             maxSize = Math.max(512 * 1024, preset.sizes[typeToIndex(type)]);
@@ -837,7 +837,7 @@ public class DownloadController extends BaseController implements NotificationCe
             }
             preset = getCurrentMobilePreset();
         }
-        final int mask = preset.mask[index];
+        final int mask = nekoChatMask(message.getDialogId(), preset.mask[index]); // NekoMod
         final long maxSize;
         if (type == AUTODOWNLOAD_TYPE_AUDIO) {
             maxSize = Math.max(512 * 1024, preset.sizes[typeToIndex(type)]);
@@ -849,6 +849,23 @@ public class DownloadController extends BaseController implements NotificationCe
             return (mask & type) != 0 ? 2 : 0;
         } else {
             return (type == AUTODOWNLOAD_TYPE_PHOTO || size != 0 && size <= maxSize) && (type == AUTODOWNLOAD_TYPE_AUDIO || (mask & type) != 0) ? 1 : 0;
+        }
+    }
+
+    // NekoMod: regla de descarga automatica propia del chat (bits del usuario 1=foto 2=video 4=archivo -> bits de Telegram)
+    private static int nekoChatMask(long dialogId, int defaultMask) {
+        try {
+            int rule = tw.nekomimi.nekogram.NekoModConfig.getAutoDownloadMask(dialogId);
+            if (rule < 0) {
+                return defaultMask;
+            }
+            int m = defaultMask & AUTODOWNLOAD_TYPE_AUDIO;
+            if ((rule & 1) != 0) m |= AUTODOWNLOAD_TYPE_PHOTO;
+            if ((rule & 2) != 0) m |= AUTODOWNLOAD_TYPE_VIDEO;
+            if ((rule & 4) != 0) m |= AUTODOWNLOAD_TYPE_DOCUMENT;
+            return m;
+        } catch (Throwable e) {
+            return defaultMask;
         }
     }
 
@@ -918,7 +935,7 @@ public class DownloadController extends BaseController implements NotificationCe
             }
             preset = getCurrentMobilePreset();
         }
-        int mask = preset.mask[index];
+        int mask = nekoChatMask(MessageObject.getDialogId(message), preset.mask[index]); // NekoMod
         long maxSize;
         if (type == AUTODOWNLOAD_TYPE_AUDIO) {
             maxSize = Math.max(512 * 1024, preset.sizes[typeToIndex(type)]);
@@ -1000,7 +1017,7 @@ public class DownloadController extends BaseController implements NotificationCe
             }
             preset = getCurrentMobilePreset();
         }
-        int mask = preset.mask[index];
+        int mask = nekoChatMask(MessageObject.getDialogId(message), preset.mask[index]); // NekoMod
         long maxSize;
         if (type == AUTODOWNLOAD_TYPE_AUDIO) {
             maxSize = Math.max(512 * 1024, preset.sizes[typeToIndex(type)]);

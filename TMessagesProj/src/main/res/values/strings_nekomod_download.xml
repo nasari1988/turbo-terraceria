@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- NekoMod: descarga masiva de chats -->
+<resources>
+    <string name="NekoModDlMenuEntry" translatable="false">Descarga masiva</string>
+    <string name="NekoModDlTitle" translatable="false">Descarga masiva</string>
+    <string name="NekoModDlWhat" translatable="false">Qué descargar</string>
+    <string name="NekoModDlVideos" translatable="false">Videos</string>
+    <string name="NekoModDlPhotos" translatable="false">Fotos</string>
+    <string name="NekoModDlGifs" translatable="false">GIFs</string>
+    <string name="NekoModDlAudio" translatable="false">Audios y notas de voz</string>
+    <string name="NekoModDlDocs" translatable="false">Documentos</string>
+    <string name="NekoModDlMusic" translatable="false">Música</string>
+    <string name="NekoModDlCountFormat" translatable="false">%1$d archivos · %2$s</string>
+    <string name="NekoModDlScanning" translatable="false">Contando archivos… (%1$d encontrados)</string>
+    <string name="NekoModDlScanError" translatable="false">No se pudo leer el chat. Toca para reintentar.</string>
+    <string name="NekoModDlRange" translatable="false">Rango de fechas (opcional)</string>
+    <string name="NekoModDlFrom" translatable="false">Desde</string>
+    <string name="NekoModDlTo" translatable="false">Hasta</string>
+    <string name="NekoModDlAnyDate" translatable="false">Sin límite</string>
+    <string name="NekoModDlClear" translatable="false">Quitar</string>
+    <string name="NekoModDlOptions" translatable="false">Opciones</string>
+    <string name="NekoModDlSkipDownloaded" translatable="false">Saltar los ya descargados</string>
+    <string name="NekoModDlSkipAbout" translatable="false">Siempre activo</string>
+    <string name="NekoModDlWifiOnly" translatable="false">Solo por Wi-Fi</string>
+    <string name="NekoModDlSynced" translatable="false">Agregar a chats sincronizados</string>
+    <string name="NekoModDlFolderNote" translatable="false">Carpeta destino: Descargas/Neko Mod/%1$s</string>
+    <string name="NekoModDlStart" translatable="false">Descargar %1$d archivos · %2$s</string>
+    <string name="NekoModDlNothing" translatable="false">No hay archivos para descargar</string>
+    <string name="NekoModDlUpdate" translatable="false">Actualizar</string>
+    <string name="NekoModDlUpdateNew" translatable="false">Actualizar: %1$d archivos nuevos · %2$s</string>
+    <string name="NekoModDlUpdateNone" translatable="false">Sin archivos nuevos desde la última descarga</string>
+    <string name="NekoModDlUpdateConfirm" translatable="false">¿Descargar %1$d archivos nuevos · %2$s?</string>
+    <string name="NekoModDlProgress" translatable="false">Descargando %1$d de %2$d</string>
+    <string name="NekoModDlPause" translatable="false">Pausar</string>
+    <string name="NekoModDlResume" translatable="false">Reanudar</string>
+    <string name="NekoModDlCancel" translatable="false">Cancelar</string>
+    <string name="NekoModDlPaused" translatable="false">En pausa · %1$d de %2$d</string>
+    <string name="NekoModDlWaitWifi" translatable="false">Esperando Wi-Fi · %1$d de %2$d</string>
+    <string name="NekoModDlFetchError" translatable="false">Error de red al leer el chat · %1$d de %2$d</string>
+    <string name="NekoModDlFinished" translatable="false">Listo: %1$d de %2$d descargados, %3$d con error</string>
+    <string name="NekoModDlPendingFound" translatable="false">Hay %1$d archivos pendientes de una descarga anterior</string>
+    <string name="NekoModDlNotifChannel" translatable="false">Descargas Neko Mod</string>
+    <string name="NekoModDlNotifTitle" translatable="false">Descarga masiva</string>
+    <string name="NekoModDlSyncedTitle" translatable="false">Chats sincronizados</string>
+    <string name="NekoModDlSyncedEmpty" translatable="false">No hay chats sincronizados. Agrégalos desde Descarga masiva.</string>
+    <string name="NekoModDlLastSync" translatable="false">Última sincronización: %1$s</string>
+    <string name="NekoModDlNeverSynced" translatable="false">Nunca sincronizado</string>
+    <string name="NekoModDlUpdateAll" translatable="false">Actualizar todos</string>
+    <string name="NekoModDlRemove" translatable="false">Quitar de sincronizados</string>
+    <string name="NekoModDlUpdatingAll" translatable="false">Actualizando %1$d chats…</string>
+    <string name="NekoModDlNightly" translatable="false">Sincronizar cada noche (Wi-Fi sin límite y cargando)</string>
+    <string name="NekoModDlRedownload" translatable="false">Volver a bajar archivos borrados de la carpeta</string>
+    <string name="NekoModDlUnknownChat" translatable="false">Chat</string>
+    <string name="NekoModDlOk" translatable="false">Aceptar</string>
+</resources>

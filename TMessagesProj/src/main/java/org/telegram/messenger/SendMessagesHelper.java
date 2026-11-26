@@ -11280,6 +11280,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                             videoEditedInfo = null;
                         } else {
                             videoEditedInfo = info.videoEditedInfo != null ? info.videoEditedInfo : createCompressionSettings(info.path, info.livePhotoVideoOffset);
+                            nekoKeepOriginalVideo(videoEditedInfo, info.path, info.isLivePhoto); // NekoMod
                         }
 
                         if (!forceDocument && (videoEditedInfo != null || info.path.endsWith("mp4")) || info.isLivePhoto) {
@@ -12009,6 +12010,22 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
         return bitmap;
     }
 
+    // NekoMod: con sendOriginalVideo, un mp4 sin ediciones se envia tal cual (bitrate -2 => needConvert() == false)
+    private static void nekoKeepOriginalVideo(VideoEditedInfo v, String path, boolean livePhoto) {
+        if (v == null || path == null || livePhoto || !tw.nekomimi.nekogram.NekoModConfig.sendOriginalVideo) {
+            return;
+        }
+        if (!path.toLowerCase(Locale.US).endsWith(".mp4")) {
+            return;
+        }
+        if (v.roundVideo || v.muted || v.isSticker || v.isStory || v.mediaEntities != null || v.paintPath != null || v.blurPath != null || v.filterState != null || v.cropState != null || !v.mixedSoundInfos.isEmpty() || v.startTime > 0 || (v.endTime != -1 && v.endTime != v.estimatedDuration)) {
+            return;
+        }
+        v.bitrate = -2;
+        v.resultWidth = v.originalWidth;
+        v.resultHeight = v.originalHeight;
+    }
+
     private static VideoEditedInfo createCompressionSettings(String videoPath, long videoOffset) {
         int[] params = new int[AnimatedFileInfo.PARAM_NUM_COUNT];
         AnimatedFileNative.getVideoInfo(videoPath, params, videoOffset);
@@ -12137,6 +12154,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
         }
         new Thread(() -> {
             final VideoEditedInfo videoEditedInfo = info != null ? info : createCompressionSettings(videoPath, 0);
+            nekoKeepOriginalVideo(videoEditedInfo, videoPath, false); // NekoMod
 
             boolean isEncrypted = DialogObject.isEncryptedDialog(dialogId);
 

@@ -2217,6 +2217,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
     private final static int gallery_menu_create_sticker = 25;
     private final static int gallery_menu_delete2 = 26;
     private final static int gallery_menu_neko_autoscroll = 9042; // NekoMod:
+    private final static int gallery_menu_neko_ocr = 9043; // NekoMod:
     private final static int gallery_menu_lens = 42;
     private final static int gallery_menu_qr = 84;
     private final static int gallery_menu_copy = 86;
@@ -5644,6 +5645,8 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
                     releasePlayer(false);
                     bottomLayout.setTag(1);
                     bottomLayout.setVisibility(View.VISIBLE);
+                } else if (id == gallery_menu_neko_ocr) { // NekoMod:
+                    nekoCopyTextFromCurrent();
                 } else if (id == gallery_menu_neko_autoscroll) { // NekoMod:
                     final boolean enabled = !NekoModConfig.videoAutoScroll;
                     NekoModConfig.setBoolean("videoAutoScroll", enabled);
@@ -5979,6 +5982,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
         allMediaItem.setColors(0xfffafafa, 0xfffafafa);
         menuItem.addSubItem(gallery_menu_savegif, R.drawable.msg_gif, getString(R.string.SaveToGIFs)).setColors(0xfffafafa, 0xfffafafa);
         nekoAutoScrollItem = menuItem.addSubItem(gallery_menu_neko_autoscroll, R.drawable.menu_video_loop, getString(R.string.NekoModAutoScrollOff)).setColors(0xfffafafa, 0xfffafafa); // NekoMod:
+        menuItem.addSubItem(gallery_menu_neko_ocr, R.drawable.msg_search, getString(R.string.NekoModOcrCopyText)).setColors(0xfffafafa, 0xfffafafa); // NekoMod:
         menuItem.addSubItem(gallery_menu_showinchat, R.drawable.msg_message, getString(R.string.ShowInChat)).setColors(0xfffafafa, 0xfffafafa);
         menuItem.addSubItem(gallery_menu_create_sticker, R.drawable.msg_sticker, getString(R.string.CreateSticker)).setColors(0xfffafafa, 0xfffafafa);
         menuItem.addSubItem(gallery_menu_reply, R.drawable.menu_reply, getString(R.string.Reply)).setColors(0xfffafafa, 0xfffafafa);
@@ -19567,6 +19571,56 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
 
     private boolean nekoAutoScrollApplies(MessageObject messageObject) {
         return NekoModConfig.videoAutoScroll && !imagesArr.isEmpty() && imagesArrLocals.isEmpty() && pageBlocksAdapter == null && nekoIsAutoScrollItem(messageObject);
+    }
+
+    // NekoMod: OCR - copiar texto de la foto o del frame actual del video
+    private void nekoCopyTextFromCurrent() {
+        if (parentActivity == null) {
+            return;
+        }
+        Bitmap source = null;
+        try {
+            if (videoPlayer != null && videoTextureView != null && videoPlayer.isPlaying()) {
+                videoPlayer.pause();
+            }
+            if (videoPlayer != null && videoTextureView != null && videoTextureView.isAvailable() && videoTextureView.getWidth() > 0 && videoTextureView.getHeight() > 0 && videoTextureView.getParent() != null) {
+                source = videoTextureView.getBitmap();
+            }
+            if (source == null) {
+                Bitmap b = centerImage.getBitmap();
+                if (b != null && !b.isRecycled()) {
+                    source = b.copy(Bitmap.Config.ARGB_8888, false);
+                }
+            }
+        } catch (Throwable ignore) {
+            source = null;
+        }
+        if (source == null) {
+            BulletinFactory.of(containerView, null).createSimpleBulletin(R.raw.info, LocaleController.getString(R.string.NekoModOcrNoImage)).show();
+            return;
+        }
+        BulletinFactory.of(containerView, null).createSimpleBulletin(R.raw.info, LocaleController.getString(R.string.NekoModOcrRecognizing)).show();
+        tw.nekomimi.nekogram.nekomod.ocr.TextRecognizerHelper.recognize(source, new tw.nekomimi.nekogram.nekomod.ocr.TextRecognizerHelper.Callback() {
+            @Override
+            public void onResult(java.util.List<tw.nekomimi.nekogram.nekomod.ocr.TextRecognizerHelper.Line> lines) {
+                if (parentActivity == null) {
+                    return;
+                }
+                if (lines.isEmpty()) {
+                    BulletinFactory.of(containerView, null).createSimpleBulletin(R.raw.info, LocaleController.getString(R.string.NekoModOcrNoText)).show();
+                } else {
+                    tw.nekomimi.nekogram.nekomod.ocr.OcrResultSheet.show(parentActivity, lines);
+                }
+            }
+
+            @Override
+            public void onError(Exception e) {
+                if (parentActivity == null) {
+                    return;
+                }
+                BulletinFactory.of(containerView, null).createSimpleBulletin(R.raw.info, LocaleController.getString(R.string.NekoModOcrFailed)).show();
+            }
+        });
     }
 
     private void nekoHideAutoScroll() {
