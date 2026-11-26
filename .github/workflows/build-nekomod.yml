@@ -3,8 +3,6 @@ name: Build Neko Mod
 on:
   push:
     branches: [ "nekogram" ]
-    paths-ignore:
-      - '**.md'
   workflow_dispatch:
 
 concurrency:
