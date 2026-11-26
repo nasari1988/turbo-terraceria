@@ -111,7 +111,7 @@ jobs:
                   "android_client_info": { "package_name": "$PKG" }
                 },
                 "oauth_client": [],
-                "api_key": [ { "current_key": "AIzaSyA000000000000000000000000000000000" } ],
+                "api_key": [ { "current_key": "AIzaSyA00000000000000000000000000000000" } ],
                 "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
               }
             ],

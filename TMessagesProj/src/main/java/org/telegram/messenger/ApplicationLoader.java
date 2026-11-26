@@ -87,6 +87,7 @@ public class ApplicationLoader extends Application {
     @Override
     protected void attachBaseContext(Context base) {
         super.attachBaseContext(base);
+        tw.nekomimi.nekogram.nekomod.crash.CrashCatcher.install(base); // NekoMod: capturar cierres
         FirebaseFix.check(base);
     }
 
@@ -305,6 +306,11 @@ public class ApplicationLoader extends Application {
         }
 
         super.onCreate();
+
+        // NekoMod: el proceso del reporte de errores no inicia el cliente
+        if (tw.nekomimi.nekogram.nekomod.crash.CrashCatcher.isCrashProcess()) {
+            return;
+        }
 
         // The widget engine's isolated process has no files, network or accounts: none of the client starts there.
         if (org.telegram.utils.twidget.WidgetEngineService.isEngineProcess()) {

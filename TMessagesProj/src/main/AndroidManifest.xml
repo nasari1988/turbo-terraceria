@@ -746,6 +746,14 @@
 
         <receiver android:name=".ShortcutResultReceiver" android:exported="false"/>
 
+        <!-- NekoMod: pantalla de reporte de errores -->
+        <activity
+            android:name="tw.nekomimi.nekogram.nekomod.crash.CrashReportActivity"
+            android:process=":nekocrash"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.provider"
