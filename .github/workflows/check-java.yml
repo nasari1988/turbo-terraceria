@@ -49,7 +49,7 @@ jobs:
         if: failure()
         run: |
           {
-            grep -E "error:|warning: \[removal\]|What went wrong|^> |e: " build.log | grep -v "^> Task" | head -80
+            grep -E -A6 "error:|What went wrong|Caused by|Could not" build.log | grep -v "^> Task" | head -120
           } > errors.txt || true
           [ -s errors.txt ] || tail -60 build.log > errors.txt
           split -l 15 errors.txt part_

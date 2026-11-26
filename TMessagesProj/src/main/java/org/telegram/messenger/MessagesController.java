@@ -10562,7 +10562,7 @@ public class MessagesController extends BaseController implements NotificationCe
         checkReadTasks();
 
         if (getUserConfig().isClientActivated() && !getUserConfig().getCurrentUser().bot) {
-            if (!ignoreSetOnline && getConnectionsManager().getPauseTime() == 0 && ApplicationLoader.isScreenOn && !ApplicationLoader.mainInterfacePausedStageQueue) {
+            if (!ignoreSetOnline && !tw.nekomimi.nekogram.nekomod.ghost.GhostGate.shouldBlockOnline() /* NekoMod: ghost */ && getConnectionsManager().getPauseTime() == 0 && ApplicationLoader.isScreenOn && !ApplicationLoader.mainInterfacePausedStageQueue) {
                 if (ApplicationLoader.mainInterfacePausedStageQueueTime != 0 && Math.abs(ApplicationLoader.mainInterfacePausedStageQueueTime - System.currentTimeMillis()) > 1000) {
                     if (statusSettingState != 1 && (lastStatusUpdateTime == 0 || Math.abs(System.currentTimeMillis() - lastStatusUpdateTime) >= 55000 || offlineSent)) {
                         statusSettingState = 1;
@@ -11427,6 +11427,10 @@ public class MessagesController extends BaseController implements NotificationCe
 
     public boolean sendTyping(long dialogId, long threadMsgId, int action, String emojicon, int classGuid) {
         if (action < 0 || action >= sendingTypings.length || dialogId == 0) {
+            return false;
+        }
+        // NekoMod: modo fantasma, no enviar "escribiendo"
+        if (tw.nekomimi.nekogram.nekomod.ghost.GhostGate.shouldBlockTyping()) {
             return false;
         }
         final long selfId = UserConfig.getInstance(UserConfig.selectedAccount).getClientUserId();
@@ -14455,6 +14459,10 @@ public class MessagesController extends BaseController implements NotificationCe
         long dialogId = messageObject.getDialogId();
         getMessagesStorage().markMessagesContentAsRead(dialogId, arrayList, 0, 0);
         getNotificationCenter().postNotificationName(NotificationCenter.messagesReadContent, dialogId, arrayList);
+        // NekoMod: modo fantasma, no confirmar lectura de contenido al servidor
+        if (tw.nekomimi.nekogram.nekomod.ghost.GhostGate.shouldBlockRead()) {
+            return;
+        }
         if (messageObject.getId() < 0) {
             markMessageAsRead(messageObject.getDialogId(), messageObject.messageOwner.random_id, Integer.MIN_VALUE);
         } else {
@@ -14483,6 +14491,10 @@ public class MessagesController extends BaseController implements NotificationCe
 
     public void markMentionMessageAsRead(int mid, long channelId, long did) {
         getMessagesStorage().markMentionMessageAsRead(-channelId, mid, did);
+        // NekoMod: modo fantasma
+        if (tw.nekomimi.nekogram.nekomod.ghost.GhostGate.shouldBlockRead()) {
+            return;
+        }
         if (channelId != 0) {
             TLRPC.TL_channels_readMessageContents req = new TLRPC.TL_channels_readMessageContents();
             req.channel = getInputChannel(channelId);
@@ -14606,7 +14618,38 @@ public class MessagesController extends BaseController implements NotificationCe
         }
     }
 
+    // NekoMod: lecturas retenidas por el modo fantasma (solo stageQueue)
+    private final java.util.HashMap<String, ReadTask> nekoGhostHeldReads = new java.util.HashMap<>();
+    private boolean nekoGhostBypass;
+
+    // NekoMod: al enviar un mensaje (ghostReadOnReply) se envian las lecturas retenidas de ese dialogo
+    public void nekoModGhostReadOnReply(long dialogId) {
+        if (!tw.nekomimi.nekogram.nekomod.ghost.GhostGate.shouldReadOnReply()) {
+            return;
+        }
+        Utilities.stageQueue.postRunnable(() -> {
+            java.util.Iterator<java.util.Map.Entry<String, ReadTask>> it = nekoGhostHeldReads.entrySet().iterator();
+            while (it.hasNext()) {
+                ReadTask t = it.next().getValue();
+                if (t.dialogId == dialogId) {
+                    it.remove();
+                    nekoGhostBypass = true;
+                    try {
+                        completeReadTask(t);
+                    } finally {
+                        nekoGhostBypass = false;
+                    }
+                }
+            }
+        });
+    }
+
     private void completeReadTask(ReadTask task) {
+        // NekoMod: modo fantasma, no enviar lectura (el estado local ya se actualizo)
+        if (!nekoGhostBypass && tw.nekomimi.nekogram.nekomod.ghost.GhostGate.shouldBlockRead()) {
+            nekoGhostHeldReads.put(task.dialogId + "_" + task.replyId + "_" + task.monoForumPeerId, task);
+            return;
+        }
         if (task.replyId != 0 && task.monoForumPeerId == 0) {
             TLRPC.TL_messages_readDiscussion req = new TLRPC.TL_messages_readDiscussion();
             req.msg_id = (int) task.replyId;

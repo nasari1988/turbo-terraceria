@@ -609,6 +609,8 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     private ActionBarMenuSubItem nekoHideItem; // NekoMod:
     private final static int neko_lock = 150; // NekoMod:
     private final static int neko_hide = 151; // NekoMod:
+    private final static int neko_ghost = 152; // NekoMod:
+    private ActionBarMenuItem nekoGhostItem; // NekoMod:
 
     private float additionalFloatingTranslation;
     private float floatingButtonPanOffset;
@@ -3226,6 +3228,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             passcodeItem = menu.addItem(1, R.drawable.outline_header_lock_24);
             passcodeItem.setContentDescription(getString(R.string.AccDescrPasscodeLock));
 
+            // NekoMod: acceso rapido al modo fantasma
+            nekoGhostItem = menu.addItem(neko_ghost, R.drawable.nekomod_ghost);
+            nekoGhostItem.setContentDescription(getString(R.string.NekoModGhostButton));
+
             downloadsItem = menu.addItem(3, new ColorDrawable(Color.TRANSPARENT));
             downloadsItem.addView(downloadProgressIcon = new DownloadProgressIcon(currentAccount, context));
             downloadsItem.setContentDescription(getString(R.string.DownloadsTabs));
@@ -3877,6 +3883,16 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                     ((LaunchActivity) getParentActivity()).showPasscodeActivity(false, true, position[0] + passcodeItem.getMeasuredWidth() / 2, position[1] + passcodeItem.getMeasuredHeight() / 2, () -> passcodeItem.setAlpha(1.0f), () -> passcodeItem.setAlpha(0.0f));
                     getNotificationsController().showNotifications();
                     checkUi_itemPasscodeVisibility();
+                } else if (id == neko_ghost) {
+                    // NekoMod: alternar modo fantasma
+                    boolean nowGhost = !tw.nekomimi.nekogram.NekoModConfig.ghostMode;
+                    tw.nekomimi.nekogram.NekoModConfig.setBoolean("ghostMode", nowGhost);
+                    checkUi_itemGhostVisibility();
+                    if (getParentActivity() != null) {
+                        BulletinFactory.of(DialogsActivity.this).createSimpleBulletin(
+                                getParentActivity().getResources().getDrawable(R.drawable.nekomod_ghost).mutate(),
+                                getString(nowGhost ? R.string.NekoModGhostOn : R.string.NekoModGhostOff)).show();
+                    }
                 } else if (id == 3) {
                     showSearch(true, true, true);
                     fragmentSearchFieldWatcher.toggleSearch(true);
@@ -13887,7 +13903,24 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         checkUi_itemDownloadsVisibility();
         checkUi_itemSpeedVisibility();
         checkUi_itemPasscodeVisibility();
+        checkUi_itemGhostVisibility(); // NekoMod:
         checkUi_itemSearchVisibility();
+    }
+
+    // NekoMod: boton fantasma, opaco si activo y alpha 0.5 si no; oculto en busqueda/modo seleccion
+    private void checkUi_itemGhostVisibility() {
+        if (nekoGhostItem == null) {
+            return;
+        }
+        final float factor1 = 1f - animatorSearchVisible.getFloatValue();
+        final float factor2 = 1f - getRightSlidingProgress();
+        final float factor3 = 1f - animatorDoneButtonVisible.getFloatValue();
+        final float factor = factor1 * factor2 * factor3;
+        final float base = tw.nekomimi.nekogram.NekoModConfig.ghostMode ? 1f : 0.5f;
+        nekoGhostItem.setAlpha(factor * base);
+        nekoGhostItem.setScaleX(0.4f + 0.6f * factor);
+        nekoGhostItem.setScaleY(0.4f + 0.6f * factor);
+        nekoGhostItem.setVisibility(factor > 0 ? View.VISIBLE : View.GONE);
     }
 
     private void checkUi_itemBackButtonVisibility() {

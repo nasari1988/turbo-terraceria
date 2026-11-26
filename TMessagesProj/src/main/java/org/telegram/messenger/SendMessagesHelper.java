@@ -4441,6 +4441,8 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
     }
 
     public void sendMessage(SendMessageParams sendMessageParams) {
+        // NekoMod: modo fantasma con "leer al responder": enviar la lectura retenida de este chat
+        getMessagesController().nekoModGhostReadOnReply(sendMessageParams.peer);
         final SendMessageChatArguments sendMessageChatArguments = sendMessageParams.sendMessageChatArguments != null ?
                 sendMessageParams.sendMessageChatArguments : SendMessageChatArguments.EMPTY;
         String message = sendMessageParams.message;

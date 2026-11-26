@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="NekoModGhostOn" translatable="false">Modo fantasma activado</string>
+    <string name="NekoModGhostOff" translatable="false">Modo fantasma desactivado</string>
+    <string name="NekoModGhostButton" translatable="false">Modo fantasma</string>
+</resources>
