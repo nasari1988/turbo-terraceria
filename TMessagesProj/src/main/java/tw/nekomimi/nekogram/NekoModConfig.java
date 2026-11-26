@@ -39,6 +39,38 @@ public class NekoModConfig {
     public static boolean autoScrollGifs = false;   // incluir GIFs
     public static boolean autoScrollLoop = false;   // volver al primero al llegar al final
 
+    // ---- Privacidad: mensajes ----
+    public static boolean saveDeletedMessages = true; // conservar mensajes borrados marcados
+    public static boolean saveEditHistory = true;     // guardar versiones de mensajes editados
+
+    // ---- Privacidad: modo fantasma ----
+    public static boolean ghostMode = false;          // interruptor general
+    public static boolean ghostNoRead = true;         // no enviar "leído"
+    public static boolean ghostNoTyping = true;       // no enviar "escribiendo…"
+    public static boolean ghostNoOnline = true;       // no aparecer "en línea"
+    public static boolean ghostNoStories = true;      // ver historias sin marcar vistas
+    public static boolean ghostReadOnReply = false;   // al responder sí marcar como leído
+
+    // ---- Privacidad: candado y chats ocultos ----
+    public static final int RELOCK_ON_EXIT = 0;       // al salir de la app
+    public static final int RELOCK_ALWAYS = 1;        // cada vez que se abre el chat
+    public static String lockedDialogs = "";          // ids separados por coma
+    public static String lockedFolders = "";          // ids de carpeta separados por coma
+    public static int relockMode = RELOCK_ON_EXIT;
+    public static boolean lockHidePreview = true;     // ocultar vista previa en notificaciones de chats bloqueados
+    public static String hiddenDialogs = "";          // ids separados por coma
+    public static String hiddenPinHash = "";          // SHA-256 del PIN para ver chats ocultos ("" = sin configurar)
+
+    // ---- Privacidad: código falso y disfraz ----
+    public static String fakePasscodeHash = "";       // SHA-256 del código falso ("" = desactivado)
+    public static boolean fakeWipeHidden = false;     // al usar el código falso, borrar chats ocultos
+    public static boolean calculatorDisguise = false; // ícono y pantalla de calculadora
+
+    // Estado en memoria (no se guarda): true tras entrar con el código falso
+    public static volatile boolean fakeModeActive = false;
+    // Estado en memoria: true cuando el usuario desbloqueó los chats ocultos en esta sesión
+    public static volatile boolean hiddenUnlocked = false;
+
     private static SharedPreferences preferences;
 
     static {
@@ -69,6 +101,24 @@ public class NekoModConfig {
         autoScrollDelay = preferences.getInt("autoScrollDelay", 3);
         autoScrollGifs = preferences.getBoolean("autoScrollGifs", false);
         autoScrollLoop = preferences.getBoolean("autoScrollLoop", false);
+
+        saveDeletedMessages = preferences.getBoolean("saveDeletedMessages", true);
+        saveEditHistory = preferences.getBoolean("saveEditHistory", true);
+        ghostMode = preferences.getBoolean("ghostMode", false);
+        ghostNoRead = preferences.getBoolean("ghostNoRead", true);
+        ghostNoTyping = preferences.getBoolean("ghostNoTyping", true);
+        ghostNoOnline = preferences.getBoolean("ghostNoOnline", true);
+        ghostNoStories = preferences.getBoolean("ghostNoStories", true);
+        ghostReadOnReply = preferences.getBoolean("ghostReadOnReply", false);
+        lockedDialogs = preferences.getString("lockedDialogs", "");
+        lockedFolders = preferences.getString("lockedFolders", "");
+        relockMode = preferences.getInt("relockMode", RELOCK_ON_EXIT);
+        lockHidePreview = preferences.getBoolean("lockHidePreview", true);
+        hiddenDialogs = preferences.getString("hiddenDialogs", "");
+        hiddenPinHash = preferences.getString("hiddenPinHash", "");
+        fakePasscodeHash = preferences.getString("fakePasscodeHash", "");
+        fakeWipeHidden = preferences.getBoolean("fakeWipeHidden", false);
+        calculatorDisguise = preferences.getBoolean("calculatorDisguise", false);
     }
 
     public static void setBoolean(String key, boolean value) {
@@ -83,6 +133,53 @@ public class NekoModConfig {
         if (preferences == null) return;
         preferences.edit().putInt(key, value).apply();
         load();
+    }
+
+    public static void setString(String key, String value) {
+        SharedPreferences preferences = prefs();
+        if (preferences == null) return;
+        preferences.edit().putString(key, value).apply();
+        load();
+    }
+
+    // ---- utilidades para listas de ids guardadas como "1,2,3" ----
+    public static java.util.Set<Long> parseIds(String csv) {
+        java.util.HashSet<Long> set = new java.util.HashSet<>();
+        if (csv == null || csv.isEmpty()) return set;
+        for (String p : csv.split(",")) {
+            try { set.add(Long.parseLong(p.trim())); } catch (NumberFormatException ignore) { }
+        }
+        return set;
+    }
+
+    public static String joinIds(java.util.Set<Long> ids) {
+        StringBuilder sb = new StringBuilder();
+        for (Long id : ids) {
+            if (sb.length() > 0) sb.append(',');
+            sb.append(id);
+        }
+        return sb.toString();
+    }
+
+    public static boolean isGhost() { return ghostMode && !fakeModeActive; }
+
+    public static boolean isDialogLocked(long dialogId) { return parseIds(lockedDialogs).contains(dialogId); }
+
+    public static boolean isFolderLocked(int folderId) { return parseIds(lockedFolders).contains((long) folderId); }
+
+    public static boolean isDialogHidden(long dialogId) { return parseIds(hiddenDialogs).contains(dialogId); }
+
+    /** SHA-256 en hex, para PIN y códigos. */
+    public static String sha256(String text) {
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] h = md.digest(("nekomod:" + text).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (byte b : h) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (Exception e) {
+            return "";
+        }
     }
 
     /** Multiplicador para duraciones de animación según animationSpeed. 0 = sin animación. */
