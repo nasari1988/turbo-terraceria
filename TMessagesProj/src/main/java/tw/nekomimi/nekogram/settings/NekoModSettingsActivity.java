@@ -18,6 +18,26 @@ import tw.nekomimi.nekogram.NekoModConfig;
 public class NekoModSettingsActivity extends BaseNekoSettingsActivity {
 
     private static final int[] DELAYS = {0, 1, 2, 3, 5, 10};
+    // NekoMod: velocidades de audio
+    private static final float[] VOICE_SPEEDS = {1f, 1.25f, 1.5f, 1.75f, 2f, 2.5f, 3f};
+    private static final String[] VOICE_SPEED_LABELS = {"1x", "1.25x", "1.5x", "1.75x", "2x", "2.5x", "3x"};
+
+    private static int voiceSpeedIndex(float speed) {
+        int best = 0;
+        for (int i = 1; i < VOICE_SPEEDS.length; i++) {
+            if (Math.abs(VOICE_SPEEDS[i] - speed) < Math.abs(VOICE_SPEEDS[best] - speed)) best = i;
+        }
+        return best;
+    }
+
+    private static String qualityLabel(int q) {
+        return switch (q) {
+            case NekoModConfig.QUALITY_HIGH -> LocaleController.getString(R.string.NekoModSetQualityHigh);
+            case NekoModConfig.QUALITY_MEDIUM -> LocaleController.getString(R.string.NekoModSetQualityMedium);
+            case NekoModConfig.QUALITY_LOW -> LocaleController.getString(R.string.NekoModSetQualityLow);
+            default -> LocaleController.getString(R.string.NekoModSetQualityAuto);
+        };
+    }
 
     private final int selfTestRow = rowId++; // NekoMod: autodiagnóstico
     // NekoMod: filas de privacidad (etapa 2)
@@ -36,6 +56,18 @@ public class NekoModSettingsActivity extends BaseNekoSettingsActivity {
     private final int fakeWipeRow = rowId++;
     private final int calcCodeRow = rowId++;
     private final int calcDisguiseRow = rowId++;
+    // NekoMod: contenido, multimedia y descargas (etapa 3)
+    private final int allowSaveProtectedRow = rowId++;
+    private final int saveViewOnceRow = rowId++;
+    private final int playbackQualityRow = rowId++;
+    private final int saveBestQualityRow = rowId++;
+    private final int askQualityRow = rowId++;
+    private final int backgroundPlaybackRow = rowId++;
+    private final int sendOriginalVideoRow = rowId++;
+    private final int voiceSpeedRow = rowId++;
+    private final int syncedChatsRow = rowId++;
+    private final int nightlySyncRow = rowId++;
+    private final int redownloadRow = rowId++;
 
     private final int videoAutoScrollRow = rowId++;
     private final int autoScrollDelayRow = rowId++;
@@ -179,6 +211,29 @@ public class NekoModSettingsActivity extends BaseNekoSettingsActivity {
         items.add(UItem.asCheck(calcDisguiseRow, LocaleController.getString(R.string.NekoModCalcShow)).slug("calculatorDisguise").setChecked(NekoModConfig.calculatorDisguise));
         items.add(UItem.asShadow(null));
 
+        // NekoMod: contenido
+        items.add(UItem.asHeader(LocaleController.getString(R.string.NekoModSetContentHeader)));
+        items.add(UItem.asCheck(allowSaveProtectedRow, LocaleController.getString(R.string.NekoModSetAllowProtected), LocaleController.getString(R.string.NekoModSetAllowProtectedAbout)).slug("allowSaveProtected").setChecked(NekoModConfig.allowSaveProtected));
+        items.add(UItem.asCheck(saveViewOnceRow, LocaleController.getString(R.string.NekoModSetSaveViewOnce), LocaleController.getString(R.string.NekoModSetSaveViewOnceAbout)).slug("saveViewOnce").setChecked(NekoModConfig.saveViewOnce));
+        items.add(UItem.asShadow(null));
+
+        // NekoMod: multimedia
+        items.add(UItem.asHeader(LocaleController.getString(R.string.NekoModSetMediaHeader)));
+        items.add(TextSettingsCellFactory.of(playbackQualityRow, LocaleController.getString(R.string.NekoModSetPlaybackQuality), qualityLabel(NekoModConfig.videoPlaybackQuality)).slug("videoPlaybackQuality"));
+        items.add(UItem.asCheck(saveBestQualityRow, LocaleController.getString(R.string.NekoModSetSaveBest)).slug("saveBestQuality").setChecked(NekoModConfig.saveBestQuality));
+        items.add(UItem.asCheck(askQualityRow, LocaleController.getString(R.string.NekoModSetAskQuality), LocaleController.getString(R.string.NekoModSetAskQualityAbout)).slug("askQualityOnSave").setChecked(NekoModConfig.askQualityOnSave));
+        items.add(UItem.asCheck(backgroundPlaybackRow, LocaleController.getString(R.string.NekoModSetBackgroundPlayback)).slug("backgroundPlayback").setChecked(NekoModConfig.backgroundPlayback));
+        items.add(UItem.asCheck(sendOriginalVideoRow, LocaleController.getString(R.string.NekoModSetSendOriginal)).slug("sendOriginalVideo").setChecked(NekoModConfig.sendOriginalVideo));
+        items.add(TextSettingsCellFactory.of(voiceSpeedRow, LocaleController.getString(R.string.NekoModSetVoiceSpeed), VOICE_SPEED_LABELS[voiceSpeedIndex(NekoModConfig.defaultVoiceSpeed)]).slug("defaultVoiceSpeed"));
+        items.add(UItem.asShadow(null));
+
+        // NekoMod: descargas
+        items.add(UItem.asHeader(LocaleController.getString(R.string.NekoModSetDownloadsHeader)));
+        items.add(UItem.asButton(syncedChatsRow, R.drawable.msg_download, LocaleController.getString(R.string.NekoModSetSyncedChats)).slug("syncedChats"));
+        items.add(UItem.asCheck(nightlySyncRow, LocaleController.getString(R.string.NekoModSetNightlySync)).slug("nightlySync").setChecked(NekoModConfig.nightlySync));
+        items.add(UItem.asCheck(redownloadRow, LocaleController.getString(R.string.NekoModSetRedownload)).slug("redownloadDeleted").setChecked(NekoModConfig.redownloadDeleted));
+        items.add(UItem.asShadow(LocaleController.getString(R.string.NekoModSetBulkHint)));
+
         items.add(UItem.asHeader(LocaleController.getString(R.string.NekoModVideos)));
         items.add(UItem.asCheck(videoAutoScrollRow, LocaleController.getString(R.string.NekoModVideoAutoScroll)).slug("videoAutoScroll").setChecked(NekoModConfig.videoAutoScroll));
         items.add(TextSettingsCellFactory.of(autoScrollDelayRow, LocaleController.getString(R.string.NekoModAutoScrollDelay), delayLabel(NekoModConfig.autoScrollDelay)).slug("autoScrollDelay"));
@@ -285,6 +340,45 @@ public class NekoModSettingsActivity extends BaseNekoSettingsActivity {
             } else {
                 askCalcCode(this::confirmCalcDisguise);
             }
+        } else if (id == allowSaveProtectedRow) { // NekoMod: etapa 3
+            toggle(view, "allowSaveProtected", !NekoModConfig.allowSaveProtected);
+        } else if (id == saveViewOnceRow) {
+            toggle(view, "saveViewOnce", !NekoModConfig.saveViewOnce);
+        } else if (id == playbackQualityRow) {
+            ArrayList<String> arrayList = new ArrayList<>();
+            arrayList.add(qualityLabel(NekoModConfig.QUALITY_AUTO));
+            arrayList.add(qualityLabel(NekoModConfig.QUALITY_HIGH));
+            arrayList.add(qualityLabel(NekoModConfig.QUALITY_MEDIUM));
+            arrayList.add(qualityLabel(NekoModConfig.QUALITY_LOW));
+            showPopup(arrayList, NekoModConfig.videoPlaybackQuality, item, view, i -> {
+                NekoModConfig.setInt("videoPlaybackQuality", i);
+                listView.adapter.notifyItemChanged(position, PARTIAL);
+            });
+        } else if (id == saveBestQualityRow) {
+            toggle(view, "saveBestQuality", !NekoModConfig.saveBestQuality);
+        } else if (id == askQualityRow) {
+            toggle(view, "askQualityOnSave", !NekoModConfig.askQualityOnSave);
+        } else if (id == backgroundPlaybackRow) {
+            toggle(view, "backgroundPlayback", !NekoModConfig.backgroundPlayback);
+        } else if (id == sendOriginalVideoRow) {
+            toggle(view, "sendOriginalVideo", !NekoModConfig.sendOriginalVideo);
+        } else if (id == voiceSpeedRow) {
+            ArrayList<String> arrayList = new ArrayList<>();
+            for (String label : VOICE_SPEED_LABELS) {
+                arrayList.add(label);
+            }
+            showPopup(arrayList, voiceSpeedIndex(NekoModConfig.defaultVoiceSpeed), item, view, i -> {
+                NekoModConfig.setFloat("defaultVoiceSpeed", VOICE_SPEEDS[i]);
+                listView.adapter.notifyItemChanged(position, PARTIAL);
+            });
+        } else if (id == syncedChatsRow) {
+            presentFragment(new tw.nekomimi.nekogram.nekomod.download.SyncedChatsActivity());
+        } else if (id == nightlySyncRow) {
+            final boolean enable = !NekoModConfig.nightlySync;
+            toggle(view, "nightlySync", enable);
+            tw.nekomimi.nekogram.nekomod.download.NightlySyncJob.schedule(org.telegram.messenger.ApplicationLoader.applicationContext, enable);
+        } else if (id == redownloadRow) {
+            toggle(view, "redownloadDeleted", !NekoModConfig.redownloadDeleted);
         } else if (id == videoAutoScrollRow) {
             NekoModConfig.setBoolean("videoAutoScroll", !NekoModConfig.videoAutoScroll);
             if (view instanceof TextCheckCell) {

@@ -1730,6 +1730,7 @@ public class ChatActivity extends BaseFragment implements
     private final static int tag_message = 28;
     private final static int boost_group = 29;
     private final static int nekomod_bulk_download = 9101; // NekoMod: descarga masiva
+    private final static int nekomod_auto_download = 9102; // NekoMod: descarga automática por chat
 
     private final static int show_pinned = 90;
     private final static int delete_history = 91;
@@ -4161,6 +4162,8 @@ public class ChatActivity extends BaseFragment implements
                     showChatThemeBottomSheet();
                 } else if (id == nekomod_bulk_download) { // NekoMod:
                     presentFragment(new tw.nekomimi.nekogram.nekomod.download.BulkDownloadActivity(getDialogId()));
+                } else if (id == nekomod_auto_download) { // NekoMod:
+                    tw.nekomimi.nekogram.nekomod.media.AutoDownloadDialog.show(ChatActivity.this, getDialogId());
                 } else if (id == show_pinned) {
                     SharedPreferences preferences = MessagesController.getNotificationsSettings(currentAccount);
                     preferences.edit().putInt("pin_" + dialog_id, 0).commit();
@@ -4599,6 +4602,7 @@ public class ChatActivity extends BaseFragment implements
             // NekoMod: descarga masiva del chat
             if (!isTopic && currentEncryptedChat == null && getDialogId() != 0 && chatMode == MODE_DEFAULT) {
                 headerItem.lazilyAddSubItem(nekomod_bulk_download, R.drawable.msg_download, LocaleController.getString(R.string.NekoModDlMenuEntry));
+                headerItem.lazilyAddSubItem(nekomod_auto_download, R.drawable.msg_download, LocaleController.getString(R.string.NekoModAutoDlMenuEntry)); // NekoMod:
             }
             if (currentUser != null && currentUser.self && getDialogId() != UserObject.VERIFY) {
                 headerItem.lazilyAddSubItem(add_shortcut, R.drawable.msg_home, LocaleController.getString(R.string.AddShortcut));

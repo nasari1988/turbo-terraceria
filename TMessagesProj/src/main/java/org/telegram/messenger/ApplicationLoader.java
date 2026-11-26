@@ -385,6 +385,27 @@ public class ApplicationLoader extends Application {
         LauncherIconController.tryFixLauncherIconIfNeeded();
         ProxyRotationController.init();
 
+        // NekoMod: si la sincronización nocturna está activa, asegurar que el trabajo esté programado
+        try {
+            if (tw.nekomimi.nekogram.NekoModConfig.nightlySync) {
+                android.app.job.JobScheduler nekoJs = (android.app.job.JobScheduler) applicationContext.getSystemService(Context.JOB_SCHEDULER_SERVICE);
+                boolean nekoScheduled = false;
+                if (nekoJs != null) {
+                    for (android.app.job.JobInfo nekoInfo : nekoJs.getAllPendingJobs()) {
+                        if (nekoInfo.getId() == tw.nekomimi.nekogram.nekomod.download.NightlySyncJob.JOB_ID) {
+                            nekoScheduled = true;
+                            break;
+                        }
+                    }
+                }
+                if (nekoJs != null && !nekoScheduled) {
+                    tw.nekomimi.nekogram.nekomod.download.NightlySyncJob.schedule(applicationContext, true);
+                }
+            }
+        } catch (Throwable e) {
+            FileLog.e(e);
+        }
+
         //if (BuildConfig.DEBUG_PRIVATE_VERSION) {
         //    Choreographer60FpsContent.getInstance().addFrameCallback(debugEverySecondChecks, 1);
         //}

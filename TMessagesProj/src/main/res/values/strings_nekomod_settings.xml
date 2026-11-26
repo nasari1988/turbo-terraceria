@@ -72,4 +72,35 @@
     <string name="NekoModCalcConfirm" translatable="false">El ícono de Neko Mod será reemplazado por una Calculadora. Para entrar escribe tu código y pulsa =. Si lo olvidas, abre «Neko Mod Diagnóstico».</string>
     <string name="NekoModCalcAccept" translatable="false">Aceptar</string>
     <string name="NekoModCalcCancel" translatable="false">Cancelar</string>
+    <!-- NekoMod: ajustes de contenido, multimedia y descargas -->
+    <string name="NekoModSetContentHeader" translatable="false">Contenido</string>
+    <string name="NekoModSetAllowProtected" translatable="false">Permitir guardar contenido protegido</string>
+    <string name="NekoModSetAllowProtectedAbout" translatable="false">Copiar, guardar y capturar en chats con restricción. Reenviar lo bloquea Telegram.</string>
+    <string name="NekoModSetSaveViewOnce" translatable="false">Guardar fotos y videos de un solo uso</string>
+    <string name="NekoModSetSaveViewOnceAbout" translatable="false">Se guardan en Galería › Neko Mod al abrirlos</string>
+    <string name="NekoModSetMediaHeader" translatable="false">Multimedia</string>
+    <string name="NekoModSetPlaybackQuality" translatable="false">Calidad de reproducción</string>
+    <string name="NekoModSetQualityAuto" translatable="false">Automática</string>
+    <string name="NekoModSetQualityHigh" translatable="false">Alta</string>
+    <string name="NekoModSetQualityMedium" translatable="false">Media</string>
+    <string name="NekoModSetQualityLow" translatable="false">Baja</string>
+    <string name="NekoModSetSaveBest" translatable="false">Guardar en la mejor calidad</string>
+    <string name="NekoModSetAskQuality" translatable="false">Preguntar calidad al guardar</string>
+    <string name="NekoModSetAskQualityAbout" translatable="false">También: mantén presionado Guardar en el visor</string>
+    <string name="NekoModSetBackgroundPlayback" translatable="false">Reproducir con pantalla apagada</string>
+    <string name="NekoModSetSendOriginal" translatable="false">Enviar videos en calidad original</string>
+    <string name="NekoModSetVoiceSpeed" translatable="false">Velocidad inicial de audios</string>
+    <string name="NekoModSetDownloadsHeader" translatable="false">Descargas</string>
+    <string name="NekoModSetSyncedChats" translatable="false">Chats sincronizados</string>
+    <string name="NekoModSetNightlySync" translatable="false">Sincronizar cada noche con Wi-Fi</string>
+    <string name="NekoModSetRedownload" translatable="false">Volver a bajar archivos borrados</string>
+    <string name="NekoModSetBulkHint" translatable="false">Para descargar todo un chat: ⋮ dentro del chat → Descarga masiva</string>
+    <string name="NekoModAutoDlMenuEntry" translatable="false">Descarga automática aquí</string>
+    <string name="NekoModAutoDlTitle" translatable="false">Descarga automática en este chat</string>
+    <string name="NekoModAutoDlUseGlobal" translatable="false">Usar configuración global</string>
+    <string name="NekoModAutoDlSave" translatable="false">Guardar</string>
+    <string name="NekoModAutoDlCancel" translatable="false">Cancelar</string>
+    <string name="NekoModAutoDlPhotos" translatable="false">Fotos</string>
+    <string name="NekoModAutoDlVideos" translatable="false">Videos</string>
+    <string name="NekoModAutoDlFiles" translatable="false">Archivos</string>
 </resources>

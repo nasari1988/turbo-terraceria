@@ -70,9 +70,12 @@ public final class NekoModSelfTest {
         }
 
         // 3. Burbujas
+        // NekoMod: radio efectivo según el estilo (no SharedConfig.bubbleRadius a secas)
+        int effectiveRadius = NekoModConfig.bubbleStyle == NekoModConfig.BUBBLE_SQUARE ? 3
+                : NekoModConfig.bubbleStyle == NekoModConfig.BUBBLE_IOS ? 24 : SharedConfig.bubbleRadius;
         add(out, NekoModConfig.bubbleStyle >= 0 && NekoModConfig.bubbleStyle <= 2 ? OK : FAIL, "Forma de burbujas",
                 new String[]{"Redondas", "Cuadradas", "Estilo iOS"}[Math.max(0, Math.min(2, NekoModConfig.bubbleStyle))]
-                        + " (radio actual " + SharedConfig.bubbleRadius + ")");
+                        + " (radio efectivo " + effectiveRadius + ")");
 
         // 4. Fuente Inter
         String[] fonts = {"fonts/inter_regular.ttf", "fonts/inter_medium.ttf", "fonts/inter_bold.ttf", "fonts/inter_italic.ttf"};
@@ -131,6 +134,33 @@ public final class NekoModSelfTest {
             addResult(out, "Código falso y calculadora", tw.nekomimi.nekogram.nekomod.fake.FakeSelfTest.run(context));
         } catch (Throwable e) {
             add(out, FAIL, "Código falso y calculadora", e.toString());
+        }
+
+        // NekoMod: pruebas de la etapa 3
+        try {
+            addResult(out, "Descarga masiva", tw.nekomimi.nekogram.nekomod.download.DownloadSelfTest.run(context));
+        } catch (Throwable e) {
+            add(out, FAIL, "Descarga masiva", e.toString());
+        }
+        try {
+            addResult(out, "Copiar texto (OCR)", tw.nekomimi.nekogram.nekomod.ocr.OcrSelfTest.run(context));
+        } catch (Throwable e) {
+            add(out, FAIL, "Copiar texto (OCR)", e.toString());
+        }
+        try {
+            addResult(out, "Multimedia", tw.nekomimi.nekogram.nekomod.media.MediaSelfTest.run());
+        } catch (Throwable e) {
+            add(out, FAIL, "Multimedia", e.toString());
+        }
+        try {
+            addResult(out, "Calidad de video", tw.nekomimi.nekogram.nekomod.media.QualitySelfTest.run());
+        } catch (Throwable e) {
+            add(out, FAIL, "Calidad de video", e.toString());
+        }
+        try {
+            addResult(out, "Contenido protegido", tw.nekomimi.nekogram.nekomod.content.ContentSelfTest.run());
+        } catch (Throwable e) {
+            add(out, FAIL, "Contenido protegido", e.toString());
         }
 
         // 8. Capturador de errores
