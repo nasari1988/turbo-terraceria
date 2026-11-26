@@ -9361,6 +9361,8 @@ public class MessagesController extends BaseController implements NotificationCe
         ArrayList<Integer> toSend = null;
         long channelId;
         if (taskId == 0) {
+            // NekoMod: borrado iniciado por el usuario, no se conserva
+            tw.nekomimi.nekogram.nekomod.history.NekoHistoryHooks.markOwnDelete(dialogId, messages);
             if (dialogId != 0 && DialogObject.isChatDialog(dialogId)) {
                 TLRPC.Chat chat = getChat(-dialogId);
                 channelId = ChatObject.isChannel(chat) ? chat.id : 0;
@@ -19565,6 +19567,8 @@ public class MessagesController extends BaseController implements NotificationCe
                 }
 
                 MessageObject.getDialogId(message);
+                // NekoMod: guardar la version anterior del texto (saveEditHistory)
+                tw.nekomimi.nekogram.nekomod.history.NekoHistoryHooks.onEditUpdate(currentAccount, message);
 
                 ConcurrentHashMap<Long, Integer> read_max = message.out ? dialogs_read_outbox_max : dialogs_read_inbox_max;
                 Integer value = read_max.get(message.dialog_id);
@@ -21127,6 +21131,8 @@ public class MessagesController extends BaseController implements NotificationCe
             }
         });
 
+        // NekoMod: conservar mensajes borrados remotamente (saveDeletedMessages)
+        tw.nekomimi.nekogram.nekomod.history.NekoHistoryHooks.filterRemoteDeletes(currentAccount, deletedMessages, date);
         LongSparseIntArray markAsReadMessagesInboxFinal = markAsReadMessagesInbox;
         LongSparseIntArray markAsReadMessagesOutboxFinal = markAsReadMessagesOutbox;
         LongSparseArray<ArrayList<Integer>> markContentAsReadMessagesFinal = markContentAsReadMessages;

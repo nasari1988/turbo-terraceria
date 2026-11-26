@@ -286,6 +286,7 @@ import tw.nekomimi.nekogram.folder.FolderIconHelper;
 import tw.nekomimi.nekogram.forward.ForwardContext;
 import tw.nekomimi.nekogram.NekoConfig;
 import tw.nekomimi.nekogram.forward.SendItemOptions;
+import tw.nekomimi.nekogram.nekomod.lock.LockActions; // NekoMod:
 import tw.nekomimi.nekogram.helpers.AccountsHelper;
 import tw.nekomimi.nekogram.helpers.PasscodeHelper;
 import me.vkryl.android.animator.BoolAnimator;
@@ -604,6 +605,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     private ActionBarMenuSubItem readItem;
     @Nullable
     private ActionBarMenuSubItem blockItem;
+    private ActionBarMenuSubItem nekoLockItem; // NekoMod:
+    private ActionBarMenuSubItem nekoHideItem; // NekoMod:
+    private final static int neko_lock = 150; // NekoMod:
+    private final static int neko_hide = 151; // NekoMod:
 
     private float additionalFloatingTranslation;
     private float floatingButtonPanOffset;
@@ -3466,6 +3471,21 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 statusDrawable.center = true;
                 actionBar.setTitle(TypefaceHelper.getTitleText(), statusDrawable);
                 updateStatus(UserConfig.getInstance(currentAccount).getCurrentUser(), false);
+                // NekoMod: mantener presionada la barra superior pide el PIN de chats ocultos
+                if (!onlySelect && initialDialogsType == DIALOGS_TYPE_DEFAULT) {
+                    actionBar.setOnLongClickListener(v -> {
+                        if (actionBar.isActionModeShowed() || actionBar.isSearchFieldVisible()) {
+                            return false;
+                        }
+                        if (tw.nekomimi.nekogram.NekoModConfig.hiddenUnlocked) {
+                            tw.nekomimi.nekogram.NekoModConfig.hiddenUnlocked = false; // volver a ocultar
+                            nekoModReloadDialogs();
+                        } else {
+                            LockActions.askPinToToggleHidden(DialogsActivity.this, () -> nekoModReloadDialogs());
+                        }
+                        return true;
+                    });
+                }
             }
             if (folderId == 0) {
                 actionBar.setSupportsHolidayImage(true);
@@ -3767,6 +3787,9 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                                     FilterCreateActivity.FilterInvitesBottomSheet.show(DialogsActivity.this, finalFilter, null);
                                 }
                             })
+                            .addIf(!defaultTab && finalFilter != null, R.drawable.msg_secret, finalFilter != null ? LockActions.folderLockLabel(finalFilter.id) : "", () -> { // NekoMod:
+                                LockActions.toggleFolderLock(DialogsActivity.this, finalFilter.id);
+                            })
                             .addIf(!defaultTab, R.drawable.msg_delete, LocaleController.getString(R.string.FilterDeleteItem), true, () -> {
                                 showDeleteAlert(dialogFilter);
                             })
@@ -3955,6 +3978,14 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                         undoView.showWithAction(did, UndoView.ACTION_REMOVED_FROM_FOLDER, neverShow.size(), filter, null, null);
                     }
                     hideActionMode(false);
+                } else if (id == neko_lock || id == neko_hide) { // NekoMod:
+                    final ArrayList<Long> nekoSelected = new ArrayList<>(selectedDialogs);
+                    hideActionMode(true);
+                    if (id == neko_lock) {
+                        LockActions.toggleDialogsLock(DialogsActivity.this, nekoSelected, null);
+                    } else {
+                        LockActions.toggleDialogsHidden(DialogsActivity.this, nekoSelected, () -> nekoModReloadDialogs());
+                    }
                 } else if (id == pin || id == read || id == delete || id == clear || id == mute || id == archive || id == block || id == archive2 || id == pin2) {
                     performSelectedDialogsAction(selectedDialogs, id, true, false);
                 }
@@ -6751,6 +6782,9 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         readItem = otherItem.addSubItem(read, R.drawable.msg_markread, LocaleController.getString(R.string.MarkAsRead));
         clearItem = otherItem.addSubItem(clear, R.drawable.msg_clear, LocaleController.getString(R.string.ClearHistory));
         blockItem = otherItem.addSubItem(block, R.drawable.msg_block, LocaleController.getString(R.string.BlockUser));
+        // NekoMod: candado y ocultar chat
+        nekoLockItem = otherItem.addSubItem(neko_lock, R.drawable.msg_secret, getString(R.string.NekoModLockLockChat));
+        nekoHideItem = otherItem.addSubItem(neko_hide, R.drawable.msg_viewchats, getString(R.string.NekoModLockHideChat));
 
         muteItem.setOnLongClickListener(e -> {
             performSelectedDialogsAction(selectedDialogs, mute, true, true);
@@ -9950,6 +9984,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 blockItem.setVisibility(View.VISIBLE);
             }
         }
+        LockActions.updateActionItems(nekoLockItem, nekoHideItem, selectedDialogs); // NekoMod:
         if (removeFromFolderItem != null) {
             boolean cantRemoveFromFolder = filterTabsView == null || filterTabsView.getVisibility() != View.VISIBLE || filterTabsView.currentTabIsDefault();
             if (!cantRemoveFromFolder) {
@@ -10492,6 +10527,11 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         }
     }
 
+    // NekoMod: refresca la lista tras ocultar/mostrar chats
+    private void nekoModReloadDialogs() {
+        getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
+    }
+
     private void reloadViewPageDialogs(ViewPage viewPage, boolean newMessage) {
         if (viewPage.getVisibility() != View.VISIBLE) {
             return;
@@ -11021,7 +11061,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         }
         MessagesController messagesController = AccountInstance.getInstance(currentAccount).getMessagesController();
         if (dialogsType == DIALOGS_TYPE_DEFAULT) {
-            return messagesController.getDialogs(folderId);
+            return LockActions.filterHidden(messagesController.getDialogs(folderId)); // NekoMod: chats ocultos
         } else if (dialogsType == DIALOGS_TYPE_WIDGET || dialogsType == DIALOGS_TYPE_IMPORT_HISTORY) {
             return messagesController.dialogsServerOnly;
         } else if (dialogsType == DIALOGS_TYPE_ADD_USERS_TO) {
@@ -11061,12 +11101,12 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         } else if (dialogsType == 7 || dialogsType == 8) {
             MessagesController.DialogFilter dialogFilter = messagesController.selectedDialogFilter[dialogsType == 7 ? 0 : 1];
             if (dialogFilter == null) {
-                return messagesController.getDialogs(folderId);
+                return LockActions.filterHidden(messagesController.getDialogs(folderId)); // NekoMod: chats ocultos
             } else {
                 if (initialDialogsType == DIALOGS_TYPE_FORWARD) {
                     return dialogFilter.dialogsForward;
                 }
-                return dialogFilter.dialogs;
+                return LockActions.filterHidden(dialogFilter.dialogs); // NekoMod: chats ocultos
             }
         } else if (dialogsType == DIALOGS_TYPE_BLOCK) {
             return messagesController.dialogsForBlock;

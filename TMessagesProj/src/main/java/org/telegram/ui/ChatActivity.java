@@ -1332,6 +1332,7 @@ public class ChatActivity extends BaseFragment implements
     public final static int OPTION_WELCOME_REVERT = 116;
     public final static int OPTION_SEND_MONEY = 117;
     public final static int OPTION_STOP_LIVE_LOCATION = 118;
+    public final static int OPTION_NEKO_EDIT_HISTORY = 119; // NekoMod:
 
     private final static int[] allowedNotificationsDuringChatListAnimations = new int[]{
             NotificationCenter.messagesRead,
@@ -3487,6 +3488,10 @@ public class ChatActivity extends BaseFragment implements
     @Override
     public void onFragmentDestroy() {
         super.onFragmentDestroy();
+        // NekoMod:
+        if (dialog_id != 0) {
+            tw.nekomimi.nekogram.nekomod.history.NekoHistoryDb.get().setDialogListener(dialog_id, null);
+        }
         if (messageMetricsView != null) {
             messageMetricsView.finish();
         }
@@ -31153,6 +31158,19 @@ public class ChatActivity extends BaseFragment implements
     @Override
     public void onResume() {
         super.onResume();
+        // NekoMod: cargar caches de historial (borrados / ediciones) del dialogo
+        if (dialog_id != 0) {
+            final tw.nekomimi.nekogram.nekomod.history.NekoHistoryDb nekoDb = tw.nekomimi.nekogram.nekomod.history.NekoHistoryDb.get();
+            final Runnable nekoRefresh = () -> {
+                if (chatAdapter != null) {
+                    chatAdapter.notifyDataSetChanged();
+                }
+            };
+            nekoDb.setDialogListener(dialog_id, nekoRefresh);
+            if (!nekoDb.isLoaded(dialog_id)) {
+                nekoDb.loadDialog(dialog_id, nekoRefresh);
+            }
+        }
         checkShowBlur(false);
         activityResumeTime = System.currentTimeMillis();
         if (openImport && getSendMessagesHelper().getImportingHistory(dialog_id) != null) {
@@ -34930,6 +34948,37 @@ public class ChatActivity extends BaseFragment implements
                 DialogsActivity fragment = new DialogsActivity(args);
                 fragment.setDelegate(this);
                 presentFragment(fragment);
+                break;
+            }
+            case OPTION_NEKO_EDIT_HISTORY: { // NekoMod:
+                final long nekoDialogId = selectedObject.getDialogId();
+                final int nekoMsgId = selectedObject.getId();
+                final android.content.Context nekoCtx = getParentActivity();
+                Utilities.globalQueue.postRunnable(() -> {
+                    final java.util.List<tw.nekomimi.nekogram.nekomod.history.NekoHistoryDb.EditVersion> versions =
+                            tw.nekomimi.nekogram.nekomod.history.NekoHistoryDb.get().getEditVersions(nekoDialogId, nekoMsgId);
+                    AndroidUtilities.runOnUIThread(() -> {
+                        if (getParentActivity() == null || versions.isEmpty()) {
+                            return;
+                        }
+                        final java.text.SimpleDateFormat fmt = new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault());
+                        final StringBuilder sb = new StringBuilder();
+                        for (int i = 0; i < versions.size(); i++) {
+                            tw.nekomimi.nekogram.nekomod.history.NekoHistoryDb.EditVersion v = versions.get(i);
+                            if (i > 0) {
+                                sb.append("\n\n");
+                            }
+                            sb.append(fmt.format(new java.util.Date(v.date * 1000L))).append("\n").append(v.text);
+                        }
+                        final String original = versions.get(versions.size() - 1).text;
+                        AlertDialog.Builder b = new AlertDialog.Builder(nekoCtx, themeDelegate);
+                        b.setTitle(getString(R.string.NekoModHistoryEditHistory));
+                        b.setMessage(sb.toString());
+                        b.setPositiveButton(getString(R.string.NekoModHistoryCopyOriginal), (d, w) -> AndroidUtilities.addToClipboard(original));
+                        b.setNegativeButton(getString(R.string.NekoModHistoryClose), null);
+                        showDialog(b.create());
+                    });
+                });
                 break;
             }
             case OPTION_COPY: {
@@ -48236,6 +48285,14 @@ public class ChatActivity extends BaseFragment implements
             items.add(sendMoneyIndex, getString(R.string.WalletSendMoney));
             options.add(sendMoneyIndex, OPTION_SEND_MONEY);
             icons.add(sendMoneyIndex, R.drawable.ic_gram);
+        }
+
+        // NekoMod: historial de ediciones (solo si hay versiones guardadas)
+        if (tw.nekomimi.nekogram.NekoModConfig.saveEditHistory && selectedObject != null
+                && tw.nekomimi.nekogram.nekomod.history.NekoHistoryDb.get().getEditCountCached(selectedObject.getDialogId(), selectedObject.getId()) > 0) {
+            items.add(getString(R.string.NekoModHistoryEditHistory));
+            options.add(OPTION_NEKO_EDIT_HISTORY);
+            icons.add(R.drawable.msg_edit);
         }
 
         if (showWelcomeMessageRevertOption(primaryMessage)) {

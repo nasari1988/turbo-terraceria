@@ -15700,6 +15700,16 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
             timeString = formatString(R.string.ScheduledTimeApprox, timeString);
         }
         currentTimeString = new SpannableStringBuilder(timeString);
+        // NekoMod: prefijos "borrado" / "editado (N)" (solo cache en memoria)
+        if (tw.nekomimi.nekogram.NekoModConfig.saveEditHistory && edited) {
+            int nekoEdits = tw.nekomimi.nekogram.nekomod.history.NekoHistoryDb.get().getEditCountCached(messageObject.getDialogId(), messageObject.getId());
+            if (nekoEdits > 0) {
+                currentTimeString.insert(0, formatString(R.string.NekoModHistoryEditedCount, nekoEdits));
+            }
+        }
+        if (tw.nekomimi.nekogram.NekoModConfig.saveDeletedMessages && tw.nekomimi.nekogram.nekomod.history.NekoHistoryDb.get().isDeleted(messageObject.getDialogId(), messageObject.getId())) {
+            currentTimeString.insert(0, getString(R.string.NekoModHistoryDeletedPrefix));
+        }
         if (signString != null) {
             if (messageObject.messageOwner.via_business_bot_id != 0) {
                 currentTimeString.append(", ");
@@ -17393,7 +17403,9 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
             return;
         }
 
-        final int sponosoredAlpha = (int) (255 * (1f - isSponsoredMessageHidden.getFloatValue()));
+        // NekoMod: burbuja de mensaje borrado remotamente con alfa 0.85
+        final float nekoDeletedAlpha = tw.nekomimi.nekogram.NekoModConfig.saveDeletedMessages && tw.nekomimi.nekogram.nekomod.history.NekoHistoryDb.get().isDeleted(currentMessageObject.getDialogId(), currentMessageObject.getId()) ? 0.85f : 1f;
+        final int sponosoredAlpha = (int) (255 * (1f - isSponsoredMessageHidden.getFloatValue()) * nekoDeletedAlpha);
         if (sponosoredAlpha == 0) {
             return;
         }

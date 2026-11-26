@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- NekoMod -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="#F5A623"
+        android:pathData="M24,6 L84,6 A18,18 0 0 1 102,24 L102,84 A18,18 0 0 1 84,102 L24,102 A18,18 0 0 1 6,84 L6,24 A18,18 0 0 1 24,6 Z" />
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M20,20 h20 v14 h-20 z M44,20 h20 v14 h-20 z M68,20 h20 v14 h-20 z" />
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M20,40 h20 v14 h-20 z M44,40 h20 v14 h-20 z M68,40 h20 v14 h-20 z" />
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M20,60 h20 v14 h-20 z M44,60 h20 v14 h-20 z M68,60 h20 v14 h-20 z" />
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M20,80 h20 v14 h-20 z M44,80 h20 v14 h-20 z M68,80 h20 v14 h-20 z" />
+</vector>

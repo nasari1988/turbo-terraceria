@@ -764,6 +764,25 @@
             </intent-filter>
         </activity-alias>
 
+        <!-- NekoMod: disfraz de calculadora -->
+        <activity
+            android:name="tw.nekomimi.nekogram.nekomod.fake.CalculatorActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+        <activity-alias
+            android:name="tw.nekomimi.nekogram.nekomod.fake.CalculatorAlias"
+            android:targetActivity="tw.nekomimi.nekogram.nekomod.fake.CalculatorActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:label="Calculadora"
+            android:icon="@drawable/nekomod_calc_icon">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.provider"

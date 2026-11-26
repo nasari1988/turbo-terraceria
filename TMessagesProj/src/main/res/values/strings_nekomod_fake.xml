@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="NekoModFakeTitle" translatable="false">Código falso</string>
+    <string name="NekoModFakeNeedPasscode" translatable="false">Primero activa el código de bloqueo en Privacidad</string>
+    <string name="NekoModFakeEnter" translatable="false">Código falso (4-8 dígitos)</string>
+    <string name="NekoModFakeConfirm" translatable="false">Repite el código falso</string>
+    <string name="NekoModFakeSave" translatable="false">Guardar</string>
+    <string name="NekoModFakeCancel" translatable="false">Cancelar</string>
+    <string name="NekoModFakeInvalidLength" translatable="false">El código debe tener entre 4 y 8 dígitos</string>
+    <string name="NekoModFakePinLength" translatable="false">Tu código de bloqueo es de 4 dígitos: el falso debe tener 4 dígitos</string>
+    <string name="NekoModFakeMismatch" translatable="false">Los códigos no coinciden</string>
+    <string name="NekoModFakeSameAsReal" translatable="false">Debe ser distinto del código real</string>
+    <string name="NekoModFakeSaved" translatable="false">Código falso guardado</string>
+    <string name="NekoModFakeCleared" translatable="false">Código falso eliminado</string>
+    <string name="NekoModFakeCalcLabel" translatable="false">Calculadora</string>
+</resources>

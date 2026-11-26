@@ -9,6 +9,10 @@ import org.telegram.messenger.R;
 
 public class LauncherIconController {
     public static void tryFixLauncherIconIfNeeded() {
+        // NekoMod: con el disfraz de calculadora activo no se restaura el ícono de Telegram
+        if (tw.nekomimi.nekogram.NekoModConfig.calculatorDisguise) {
+            return;
+        }
         for (LauncherIcon icon : LauncherIcon.values()) {
             if (isEnabled(icon)) {
                 return;

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="NekoModHistoryEditHistory" translatable="false">Historial de ediciones</string>
+    <string name="NekoModHistoryCopyOriginal" translatable="false">Copiar original</string>
+    <string name="NekoModHistoryClose" translatable="false">Cerrar</string>
+    <string name="NekoModHistoryDeletedPrefix" translatable="false">borrado </string>
+    <string name="NekoModHistoryEditedCount" translatable="false">editado (%1$d) </string>
+</resources>

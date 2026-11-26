@@ -94,6 +94,7 @@ import java.util.List;
 
 import tw.nekomimi.nekogram.FragmentPreviewWindow;
 import tw.nekomimi.nekogram.helpers.AnalyticsHelper;
+import tw.nekomimi.nekogram.nekomod.lock.ChatLockManager; // NekoMod:
 
 public class ActionBarLayout extends FrameLayout implements INavigationLayout, FloatingDebugProvider {
 
@@ -1119,6 +1120,7 @@ public class ActionBarLayout extends FrameLayout implements INavigationLayout, F
 //                onOpenAnimationEnd();
 //            }
 //        }
+        ChatLockManager.onAppResumed(this); // NekoMod:
         if (!fragmentsStack.isEmpty()) {
             BaseFragment lastFragment = fragmentsStack.get(fragmentsStack.size() - 1);
             lastFragment.onResume();
@@ -1142,6 +1144,7 @@ public class ActionBarLayout extends FrameLayout implements INavigationLayout, F
 
     @Override
     public void onPause() {
+        ChatLockManager.onAppPaused(); // NekoMod:
         if (!fragmentsStack.isEmpty()) {
             BaseFragment lastFragment = fragmentsStack.get(fragmentsStack.size() - 1);
             lastFragment.onPause();
@@ -2079,6 +2082,10 @@ public class ActionBarLayout extends FrameLayout implements INavigationLayout, F
         boolean preview = params.preview;
         ActionBarPopupWindow.ActionBarPopupWindowLayout menu = params.menuView;
 
+        // NekoMod: candado por chat/carpeta (huella)
+        if (fragment != null && ChatLockManager.interceptPresent(this, params)) {
+            return false;
+        }
         if (fragment == null || checkTransitionAnimation() || delegate != null && check && !delegate.needPresentFragment(this, params) || !fragment.onFragmentCreate()) {
             return false;
         }

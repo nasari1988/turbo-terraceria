@@ -1108,7 +1108,19 @@ public class PasscodeView extends FrameLayout implements NotificationCenter.Noti
                 onPasscodeError();
                 return;
             }
-            if ((!isAppLock() || !PasscodeHelper.checkPasscode((Activity) getContext(), password)) && !SharedConfig.checkPasscode(password)) {
+            // NekoMod: código falso -> mismo camino de éxito que el código real
+            boolean nekoFake = isAppLock() && tw.nekomimi.nekogram.NekoModConfig.fakePasscodeHash != null
+                    && tw.nekomimi.nekogram.NekoModConfig.fakePasscodeHash.length() > 0
+                    && tw.nekomimi.nekogram.NekoModConfig.fakePasscodeHash.equals(tw.nekomimi.nekogram.NekoModConfig.sha256(password));
+            if (nekoFake) {
+                tw.nekomimi.nekogram.NekoModConfig.fakeModeActive = true;
+                if (tw.nekomimi.nekogram.NekoModConfig.fakeWipeHidden) {
+                    tw.nekomimi.nekogram.NekoModConfig.setString("hiddenDialogs", "");
+                }
+            } else if (isAppLock() && SharedConfig.checkPasscode(password)) {
+                tw.nekomimi.nekogram.NekoModConfig.fakeModeActive = false;
+            }
+            if (!nekoFake && (!isAppLock() || !PasscodeHelper.checkPasscode((Activity) getContext(), password)) && !SharedConfig.checkPasscode(password)) {
                 SharedConfig.increaseBadPasscodeTries();
                 if (SharedConfig.passcodeRetryInMs > 0) {
                     checkRetryTextView();

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="NekoModLockPromptTitle" translatable="false">Chat bloqueado</string>
+    <string name="NekoModLockNoAuth" translatable="false">Configura huella o bloqueo de pantalla en el teléfono para abrir chats bloqueados</string>
+    <string name="NekoModLockCancel" translatable="false">Cancelar</string>
+    <string name="NekoModLockAccept" translatable="false">Aceptar</string>
+    <string name="NekoModLockNext" translatable="false">Siguiente</string>
+    <string name="NekoModLockSave" translatable="false">Guardar</string>
+    <string name="NekoModLockLockChat" translatable="false">Bloquear chat</string>
+    <string name="NekoModLockUnlockChat" translatable="false">Desbloquear chat</string>
+    <string name="NekoModLockLockFolder" translatable="false">Bloquear carpeta</string>
+    <string name="NekoModLockUnlockFolder" translatable="false">Desbloquear carpeta</string>
+    <string name="NekoModLockHideChat" translatable="false">Ocultar chat</string>
+    <string name="NekoModLockShowChat" translatable="false">Mostrar chat</string>
+    <string name="NekoModLockChatLockedBulletin" translatable="false">Chat bloqueado con huella</string>
+    <string name="NekoModLockChatUnlockedBulletin" translatable="false">Chat desbloqueado</string>
+    <string name="NekoModLockFolderLockedBulletin" translatable="false">Carpeta bloqueada: sus chats piden huella</string>
+    <string name="NekoModLockFolderUnlockedBulletin" translatable="false">Carpeta desbloqueada</string>
+    <string name="NekoModLockChatHiddenBulletin" translatable="false">Chat oculto. Mantén presionado el título para verlo</string>
+    <string name="NekoModLockChatShownBulletin" translatable="false">El chat ya no está oculto</string>
+    <string name="NekoModLockPinCreateTitle" translatable="false">PIN de chats ocultos</string>
+    <string name="NekoModLockPinCreateMessage" translatable="false">Crea un PIN de 4 a 8 dígitos para ver tus chats ocultos</string>
+    <string name="NekoModLockPinConfirmTitle" translatable="false">Confirma el PIN</string>
+    <string name="NekoModLockPinConfirmMessage" translatable="false">Escribe el mismo PIN otra vez</string>
+    <string name="NekoModLockPinInvalid" translatable="false">El PIN debe tener de 4 a 8 dígitos</string>
+    <string name="NekoModLockPinMismatch" translatable="false">Los PIN no coinciden</string>
+    <string name="NekoModLockPinEnterTitle" translatable="false">Chats ocultos</string>
+    <string name="NekoModLockPinEnterMessage" translatable="false">Escribe tu PIN para mostrar u ocultar los chats ocultos</string>
+    <string name="NekoModLockPinWrong" translatable="false">PIN incorrecto</string>
+    <string name="NekoModLockPinNone" translatable="false">Aún no hay PIN: oculta un chat primero</string>
+</resources>
