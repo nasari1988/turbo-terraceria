@@ -5001,6 +5001,13 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
                         }
 
                         final boolean isLivePhoto = currentMessageObject != null && currentMessageObject.isLivePhoto();
+                        // NekoMod: al guardar una foto usar el PhotoSize mas grande si ya esta descargado
+                        if (!isVideo && !isLivePhoto && currentMessageObject != null) {
+                            final File bestPhoto = nekoModBestPhotoFile(currentMessageObject);
+                            if (bestPhoto != null) {
+                                f = bestPhoto;
+                            }
+                        }
                         File videoFileForLivePhoto = null;
                         if (isLivePhoto) {
                             final TLRPC.Document videoDoc = MessageObject.getMedia(currentMessageObject.messageOwner) != null
@@ -5868,7 +5875,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
         videoItem.setMenuXOffset(dp(3));
 
         speedItem = new ActionBarMenuSlider.SpeedSlider(activityContext, resourcesProvider);
-        speedItem.setStops(new float[]{0.5f, 1.0f, 1.5f, 2.0f, 2.5f});
+        speedItem.setStops(new float[]{0.5f, 1.0f, 1.5f, 2.0f, 2.5f, 3.0f} /* NekoMod: 3x */);
         speedItem.setMinimumWidth(AndroidUtilities.dp(196));
         speedItem.setDrawShadow(false);
         speedItem.setBackgroundColor(0xff222222);
@@ -5963,14 +5970,32 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
 
         galleryButton = menuItem.addSwipeBackItem(R.drawable.msg_gallery, null, getString(R.string.SaveToGallery), chooseDownloadQualityLayout.layout).setColors(0xfffafafa, 0xfffafafa);
         galleryButton.setOnClickListener(v -> {
-            if (currentMessageObject != null && currentMessageObject.hasVideoQualities() && chooseDownloadQualityLayout.update(currentMessageObject)) {
-                galleryButton.openSwipeBack();
-                return;
+            if (currentMessageObject != null && currentMessageObject.hasVideoQualities()) {
+                // NekoMod: guardar solo la mejor calidad, sin menu, salvo que se pida preguntar
+                if (NekoModConfig.saveBestQuality && !NekoModConfig.askQualityOnSave) {
+                    final VideoPlayer.Quality best = nekoModBestQualityToSave(currentMessageObject);
+                    if (best != null) {
+                        chooseDownloadQualityLayout.saveQuality(currentMessageObject, best);
+                        return;
+                    }
+                }
+                if (chooseDownloadQualityLayout.update(currentMessageObject)) {
+                    galleryButton.openSwipeBack();
+                    return;
+                }
             }
             if (actionBar != null && actionBar.getActionBarMenuOnItemClick() != null) {
                 actionBar.getActionBarMenuOnItemClick().onItemClick(gallery_menu_save);
                 menuItem.toggleSubMenu();
             }
+        });
+        // NekoMod: pulsacion larga en "Guardar" abre siempre el menu de calidades
+        galleryButton.setOnLongClickListener(v -> {
+            if (currentMessageObject != null && currentMessageObject.hasVideoQualities() && chooseDownloadQualityLayout.update(currentMessageObject)) {
+                galleryButton.openSwipeBack();
+                return true;
+            }
+            return false;
         });
         galleryGap = menuItem.addColoredGap();
         galleryGap.setColor(0xff181818);
@@ -8631,6 +8656,45 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
             }
         } catch (Exception e) {
             FileLog.e(e);
+        }
+    }
+
+    // NekoMod: version de mayor resolucion (w*h) de un video con calidades; en empate prefiere el original
+    private VideoPlayer.Quality nekoModBestQualityToSave(MessageObject messageObject) {
+        if (messageObject == null || messageObject.messageOwner == null || messageObject.messageOwner.media == null) return null;
+        final ArrayList<VideoPlayer.Quality> qualities = VideoPlayer.getQualities(messageObject.currentAccount, messageObject.messageOwner.media.document, messageObject.messageOwner.media.alt_documents, 0, false);
+        VideoPlayer.Quality best = null;
+        for (int i = 0; i < qualities.size(); ++i) {
+            final VideoPlayer.Quality q = qualities.get(i);
+            if (q.uris.isEmpty()) continue;
+            if (best == null) {
+                best = q;
+                continue;
+            }
+            final long area = (long) q.width * q.height;
+            final long bestArea = (long) best.width * best.height;
+            if (area > bestArea || area == bestArea && q.original && !best.original) {
+                best = q;
+            }
+        }
+        return best;
+    }
+
+    // NekoMod: archivo del PhotoSize mas grande de la foto del mensaje (si existe en disco), o null
+    private File nekoModBestPhotoFile(MessageObject messageObject) {
+        try {
+            final TLRPC.MessageMedia media = MessageObject.getMedia(messageObject.messageOwner);
+            if (!(media instanceof TLRPC.TL_messageMediaPhoto) || media.photo == null || media.photo.sizes == null) return null;
+            final TLRPC.PhotoSize size = FileLoader.getClosestPhotoSizeWithSize(media.photo.sizes, Integer.MAX_VALUE, false, null, true);
+            if (size == null) return null;
+            File file = FileLoader.getInstance(currentAccount).getPathToAttach(size, null, false, true);
+            if (file == null || !file.exists()) {
+                file = FileLoader.getInstance(currentAccount).getPathToAttach(size, null, true, true);
+            }
+            return file != null && file.exists() ? file : null;
+        } catch (Throwable e) {
+            FileLog.e(e);
+            return null;
         }
     }
 

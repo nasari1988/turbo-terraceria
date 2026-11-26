@@ -422,13 +422,26 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
     }
 
     public static Quality getSavedQuality(ArrayList<Quality> qualities, MessageObject messageObject) {
+        // NekoMod: la eleccion manual guardada para ESTE video tiene prioridad
+        if (messageObject != null) {
+            final Quality saved = getSavedQuality(qualities, messageObject.getDialogId(), messageObject.getId());
+            if (saved != null) return saved;
+        }
         if (NekoConfig.preferOriginalQuality) {
             for (Quality q : qualities) {
                 if (q.original) return q;
             }
         }
-        if (messageObject == null) return null;
-        return getSavedQuality(qualities, messageObject.getDialogId(), messageObject.getId());
+        // NekoMod: calidad de reproduccion preferida (Alta/Media/Baja)
+        if (qualities != null && qualities.size() > 1 && tw.nekomimi.nekogram.NekoModConfig.videoPlaybackQuality != tw.nekomimi.nekogram.NekoModConfig.QUALITY_AUTO) {
+            final int[] heights = new int[qualities.size()];
+            for (int i = 0; i < heights.length; i++) {
+                heights[i] = qualities.get(i).p();
+            }
+            final int idx = tw.nekomimi.nekogram.nekomod.media.QualityPicker.pick(heights, tw.nekomimi.nekogram.NekoModConfig.videoPlaybackQuality);
+            if (idx >= 0 && idx < qualities.size()) return qualities.get(idx);
+        }
+        return null;
     }
 
     public static Quality getSavedQuality(ArrayList<Quality> qualities, long did, int mid) {

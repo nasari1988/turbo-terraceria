@@ -28,9 +28,9 @@ public class ChooseSpeedLayout {
     ActionBarMenuSlider.SpeedSlider slider;
 
     private static final float MIN_SPEED = 0.2f;
-    private static final float MAX_SPEED = 2.5f;
+    private static final float MAX_SPEED = 3.0f; // NekoMod: 3x
 
-    ActionBarMenuSubItem[] speedItems = new ActionBarMenuSubItem[5];
+    ActionBarMenuSubItem[] speedItems = new ActionBarMenuSubItem[6]; // NekoMod: +3x
     public ChooseSpeedLayout(Context context, PopupSwipeBackLayout swipeBackLayout, Callback callback) {
         speedSwipeBackLayout = new ActionBarPopupWindow.ActionBarPopupWindowLayout(context, 0, null);
         speedSwipeBackLayout.setFitItems(true);
@@ -126,6 +126,15 @@ public class ChooseSpeedLayout {
         });
         item.setSelectorColor(0x0fffffff);
         speedItems[4] = item;
+
+        // NekoMod: preset 3x
+        item = ActionBarMenuItem.addItem(speedSwipeBackLayout, R.drawable.msg_speed_superfast, LocaleController.getString(R.string.NekoModQualitySpeed3x), false, null);
+        item.setColors(0xfffafafa, 0xfffafafa);
+        item.setOnClickListener((view) -> {
+            callback.onSpeedSelected(3f, true, true);
+        });
+        item.setSelectorColor(0x0fffffff);
+        speedItems[5] = item;
     }
 
     public void update(float currentVideoSpeed, boolean isFinal) {
@@ -135,7 +144,8 @@ public class ChooseSpeedLayout {
                 a == 1 && Math.abs(currentVideoSpeed - 0.5f) < 0.1f ||
                 a == 2 && Math.abs(currentVideoSpeed - 1.0f) < 0.1f ||
                 a == 3 && Math.abs(currentVideoSpeed - 1.5f) < 0.1f ||
-                a == 4 && Math.abs(currentVideoSpeed - 2.0f) < 0.1f
+                a == 4 && Math.abs(currentVideoSpeed - 2.0f) < 0.1f ||
+                a == 5 && Math.abs(currentVideoSpeed - 3.0f) < 0.1f
             )) {
                 speedItems[a].setColors(0xff6BB6F9, 0xff6BB6F9);
             } else {

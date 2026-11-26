@@ -108,6 +108,11 @@ public class ChooseDownloadQualityLayout {
         return true;
     }
 
+    // NekoMod: guardar una calidad concreta sin mostrar el menu
+    public void saveQuality(MessageObject messageObject, VideoPlayer.Quality quality) {
+        callback.onQualitySelected(messageObject, quality);
+    }
+
     public interface Callback {
         void onQualitySelected(MessageObject messageObject, VideoPlayer.Quality quality);
     }

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="NekoModContentSavedToGallery" translatable="false">Guardado en Galería › Neko Mod</string>
+    <string name="NekoModContentAllowSaveProtected" translatable="false">Permitir guardar contenido protegido</string>
+    <string name="NekoModContentSaveViewOnce" translatable="false">Guardar fotos y videos de un solo uso</string>
+</resources>

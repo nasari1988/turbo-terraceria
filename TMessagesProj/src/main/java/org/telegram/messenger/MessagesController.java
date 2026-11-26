@@ -6673,7 +6673,7 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     public boolean isChatNoForwards(TLRPC.Chat chat) {
-        if (NekoConfig.shouldNOTTrustMe) {
+        if (NekoConfig.shouldNOTTrustMe || tw.nekomimi.nekogram.nekomod.content.ContentGate.ignoreNoForwards()) { // NekoMod: allowSaveProtected
             return false;
         }
         if (chat == null) {
@@ -6701,7 +6701,7 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     public boolean isUserNoForwards(TLRPC.UserFull userFull) {
-        if (userFull == null) {
+        if (userFull == null || tw.nekomimi.nekogram.nekomod.content.ContentGate.ignoreNoForwards()) { // NekoMod: allowSaveProtected
             return false;
         }
 

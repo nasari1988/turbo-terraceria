@@ -2088,6 +2088,10 @@ public class MessageObject {
 
         currentAccount = accountNum;
         messageOwner = message;
+        // NekoMod: allowSaveProtected - quita la marca noforwards en memoria para que copiar/guardar/captura funcionen
+        if (message != null && message.noforwards && tw.nekomimi.nekogram.nekomod.content.ContentGate.ignoreNoForwards()) {
+            message.noforwards = false;
+        }
         replyMessageObject = replyToMessage;
         eventId = eid;
         wasUnread = !messageOwner.out && messageOwner.unread;
@@ -8719,7 +8723,7 @@ public class MessageObject {
             return false;
         } else if (searchType == ChatActivity.SEARCH_PUBLIC_POSTS) {
             return true;
-        } else if (messageOwner.noforwards) {
+        } else if (messageOwner.noforwards && !tw.nekomimi.nekogram.nekomod.content.ContentGate.ignoreNoForwards()) { // NekoMod
             return false;
         } else if (messageOwner.fwd_from != null && !isOutOwner() && messageOwner.fwd_from.saved_from_peer != null && getDialogId() == UserConfig.getInstance(currentAccount).getClientUserId()) {
             return true;
@@ -12022,7 +12026,7 @@ public class MessageObject {
     public boolean canForwardMessage() {
         if (isQuickReply()) return false;
         if (type == TYPE_GIFT_STARS || type == TYPE_GIFT_THEME_UPDATE || type == TYPE_SUGGEST_BIRTHDAY || type == TYPE_GIFT_OFFER || type == TYPE_SHARING_OFFER || type == TYPE_COMMUNITY_CHANGED) return false;
-        return !(messageOwner instanceof TLRPC.TL_message_secret) && !needDrawBluredPreview() && !isLiveLocation() && type != MessageObject.TYPE_PHONE_CALL && !isSponsored() && !messageOwner.noforwards;
+        return !(messageOwner instanceof TLRPC.TL_message_secret) && !needDrawBluredPreview() && !isLiveLocation() && type != MessageObject.TYPE_PHONE_CALL && !isSponsored() && (!messageOwner.noforwards || tw.nekomimi.nekogram.nekomod.content.ContentGate.ignoreNoForwards()); // NekoMod
     }
 
     public boolean canEditMedia() {
