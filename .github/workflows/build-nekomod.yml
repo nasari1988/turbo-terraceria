@@ -121,7 +121,21 @@ jobs:
           fi
 
       - name: Build APK
-        run: ./gradlew :TMessagesProj_App:assembleRelease --stacktrace
+        run: |
+          set -o pipefail
+          ./gradlew :TMessagesProj_App:assembleRelease 2>&1 | tee build.log
+
+      - name: Publicar errores como anotaciones
+        if: failure()
+        run: |
+          [ -f build.log ] || exit 0
+          { grep -E "error:|error |FAILED|What went wrong|^> |e: " build.log | grep -v "^> Task" | head -80; } > errors.txt || true
+          [ -s errors.txt ] || tail -60 build.log > errors.txt
+          split -l 15 errors.txt part_
+          for f in part_*; do
+            msg=$(sed 's/%/%25/g' "$f" | sed ':a;N;$!ba;s/\n/%0A/g')
+            echo "::error title=Compilación ($f)::$msg"
+          done
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
