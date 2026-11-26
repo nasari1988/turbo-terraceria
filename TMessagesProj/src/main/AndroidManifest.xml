@@ -753,6 +753,16 @@
             android:exported="false"
             android:excludeFromRecents="true"
             android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+        <activity-alias
+            android:name="tw.nekomimi.nekogram.nekomod.crash.DiagnosticLauncher"
+            android:targetActivity="tw.nekomimi.nekogram.nekomod.crash.CrashReportActivity"
+            android:label="Neko Mod Diagnóstico"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <provider
             android:name="androidx.core.content.FileProvider"
