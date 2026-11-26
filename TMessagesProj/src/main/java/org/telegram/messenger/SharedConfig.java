@@ -1780,6 +1780,10 @@ public class SharedConfig {
     }
 
     public static boolean chatBlurEnabled() {
+        // NekoMod: glassBars fuerza el desenfoque (Android 12+)
+        if (tw.nekomimi.nekogram.NekoModConfig.glassBars && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            return true;
+        }
         return canBlurChat() && LiteMode.isEnabled(LiteMode.FLAG_CHAT_BLUR);
     }
 

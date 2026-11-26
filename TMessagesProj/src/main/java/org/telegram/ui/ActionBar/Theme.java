@@ -9210,7 +9210,17 @@ public class Theme {
         return getColor(key, isDefault, false);
     }
 
+    // NekoMod: tema AMOLED, fondos negros puros en temas oscuros
+    private static boolean isNekoModAmoledKey(int key) {
+        return key == key_windowBackgroundWhite || key == key_windowBackgroundGray || key == key_actionBarDefault
+                || key == key_dialogBackground || key == key_dialogBackgroundGray || key == key_chats_menuBackground
+                || key == key_chat_messagePanelBackground || key == key_chat_emojiPanelBackground;
+    }
+
     public static int getColor(int key, boolean[] isDefault, boolean ignoreAnimation) {
+        if (tw.nekomimi.nekogram.NekoModConfig.amoledTheme && currentTheme != null && isNekoModAmoledKey(key) && isCurrentThemeDark()) { // NekoMod
+            return 0xFF000000;
+        }
         if (SharedConfig.compactMode) {
             // compact mode swaps some message colors for its own keys, see getCompactColor
             final Integer compactColor = getCompactColor(key, null);

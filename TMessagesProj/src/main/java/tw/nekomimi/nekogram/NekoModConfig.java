@@ -39,14 +39,24 @@ public class NekoModConfig {
     public static boolean autoScrollGifs = false;   // incluir GIFs
     public static boolean autoScrollLoop = false;   // volver al primero al llegar al final
 
-    private static final SharedPreferences preferences =
-            ApplicationLoader.applicationContext.getSharedPreferences("nekomodconfig", Activity.MODE_PRIVATE);
+    private static SharedPreferences preferences;
 
     static {
         load();
     }
 
+    private static SharedPreferences prefs() {
+        if (preferences == null && ApplicationLoader.applicationContext != null) {
+            preferences = ApplicationLoader.applicationContext.getSharedPreferences("nekomodconfig", Activity.MODE_PRIVATE);
+        }
+        return preferences;
+    }
+
     public static void load() {
+        SharedPreferences preferences = prefs();
+        if (preferences == null) {
+            return; // muy temprano en el arranque: se usan valores por defecto
+        }
         amoledTheme = preferences.getBoolean("amoledTheme", false);
         bubbleStyle = preferences.getInt("bubbleStyle", BUBBLE_ROUNDED);
         fontFamily = preferences.getInt("fontFamily", FONT_DEFAULT);
@@ -62,11 +72,15 @@ public class NekoModConfig {
     }
 
     public static void setBoolean(String key, boolean value) {
+        SharedPreferences preferences = prefs();
+        if (preferences == null) return;
         preferences.edit().putBoolean(key, value).apply();
         load();
     }
 
     public static void setInt(String key, int value) {
+        SharedPreferences preferences = prefs();
+        if (preferences == null) return;
         preferences.edit().putInt(key, value).apply();
         load();
     }

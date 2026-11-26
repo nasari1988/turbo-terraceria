@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="NekoModVideoNext" translatable="false">Siguiente video</string>
+    <string name="NekoModVideoCancel" translatable="false">Cancelar</string>
+    <string name="NekoModVideoWatchNow" translatable="false">Ver ahora</string>
+</resources>

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="NekoModSettings" translatable="false">Neko Mod</string>
+    <string name="NekoModSettingsAbout" translatable="false">Apariencia y videos</string>
+    <string name="NekoModAppearance" translatable="false">Apariencia</string>
+    <string name="NekoModVideos" translatable="false">Videos</string>
+    <string name="NekoModVideoAutoScroll" translatable="false">Auto-scroll de videos</string>
+    <string name="NekoModAutoScrollDelay" translatable="false">Espera antes de pasar</string>
+    <string name="NekoModAutoScrollGifs" translatable="false">Incluir GIFs</string>
+    <string name="NekoModAutoScrollLoop" translatable="false">Repetir al llegar al final</string>
+    <string name="NekoModSecondsNone" translatable="false">Inmediato</string>
+    <string name="NekoModSecondsFormat" translatable="false">%d s</string>
+    <string name="NekoModTheme" translatable="false">Tema</string>
+    <string name="NekoModAmoled" translatable="false">Negro AMOLED</string>
+    <string name="NekoModAmoledAbout" translatable="false">Fondo negro puro en temas oscuros</string>
+    <string name="NekoModThemeAccent" translatable="false">Tema y color de acento</string>
+    <string name="NekoModAutoNight" translatable="false">Modo noche automático</string>
+    <string name="NekoModChatBackground" translatable="false">Fondo de chat</string>
+    <string name="NekoModAppIcon" translatable="false">Ícono de la app</string>
+    <string name="NekoModBubbles" translatable="false">Burbujas</string>
+    <string name="NekoModBubbleShape" translatable="false">Forma</string>
+    <string name="NekoModBubbleRounded" translatable="false">Redondas</string>
+    <string name="NekoModBubbleSquare" translatable="false">Cuadradas</string>
+    <string name="NekoModBubbleIos" translatable="false">Estilo iOS</string>
+    <string name="NekoModMessageCorners" translatable="false">Esquinas de mensajes</string>
+    <string name="NekoModFont" translatable="false">Fuente</string>
+    <string name="NekoModTypography" translatable="false">Tipografía</string>
+    <string name="NekoModFontDefault" translatable="false">Predeterminada</string>
+    <string name="NekoModFontInter" translatable="false">Inter</string>
+    <string name="NekoModFontSystem" translatable="false">Del sistema</string>
+    <string name="NekoModRestartFont" translatable="false">Reinicia la app para aplicar la fuente</string>
+    <string name="NekoModRestartChanges" translatable="false">Reinicia la app para ver todos los cambios</string>
+    <string name="NekoModChatList" translatable="false">Lista de chats</string>
+    <string name="NekoModCompactList" translatable="false">Modo compacto</string>
+    <string name="NekoModSquareAvatars" translatable="false">Avatares cuadrados</string>
+    <string name="NekoModEffects" translatable="false">Efectos</string>
+    <string name="NekoModGlassBars" translatable="false">Barras con efecto vidrio</string>
+    <string name="NekoModAnimations" translatable="false">Animaciones</string>
+    <string name="NekoModAnimFast" translatable="false">Rápidas</string>
+    <string name="NekoModAnimNormal" translatable="false">Normales</string>
+    <string name="NekoModAnimSmooth" translatable="false">Suaves</string>
+    <string name="NekoModAnimOff" translatable="false">Apagadas</string>
+</resources>

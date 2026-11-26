@@ -342,6 +342,8 @@ import java.util.Map;
 import java.util.Objects;
 
 import tw.nekomimi.nekogram.NekoConfig;
+import tw.nekomimi.nekogram.NekoModConfig; // NekoMod:
+import tw.nekomimi.nekogram.ui.AutoScrollOverlay; // NekoMod:
 import tw.nekomimi.nekogram.forward.ForwardItem;
 import tw.nekomimi.nekogram.helpers.LensHelper;
 import tw.nekomimi.nekogram.helpers.MessageHelper;
@@ -2144,6 +2146,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
     private boolean zoomAnimation;
     private boolean discardTap;
     private int switchImageAfterAnimation;
+    private AutoScrollOverlay nekoAutoScrollOverlay; // NekoMod:
     private VelocityTracker velocityTracker;
     private Scroller scroller;
     private boolean shownControlsByEnd = false;
@@ -10382,6 +10385,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
         if ((videoPlayer != null ? videoPlayer.isPlaying() : photoViewerWebView.isPlaying()) && playbackState != ExoPlayer.STATE_ENDED) {
             if (!isPlaying) {
                 isPlaying = true;
+                nekoHideAutoScroll(); // NekoMod:
                 photoProgressViews[0].setBackgroundState(isCurrentVideo ? PROGRESS_NONE : PROGRESS_PAUSE, false, true);
                 photoProgressViews[0].setIndexedAlpha(1, !isCurrentVideo && (!isAccessibilityEnabled() || playerWasPlaying) && ((playerAutoStarted && !playerWasPlaying) || !isActionBarVisible) ? 0f : 1f, false);
                 playerWasPlaying = true;
@@ -10425,6 +10429,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
                     if (!isActionBarVisible) {
                         toggleActionBar(true, true);
                     }
+                    nekoOnVideoEnded(); // NekoMod:
                 }
                 if (pipSession != null) {
                     pipSession.onVideoCompleted();
@@ -10850,6 +10855,10 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
         videoPlayer.setLooping(playerLooping);
         loopItem.setEnabledByColor(playerLooping, 0xFFFFFFFF, 0xFF73B4EC);
         loopItem.setSelectorColor(playerLooping ? 0x0F73B4EC : 0x0fffffff);
+        // NekoMod: con auto-scroll el video no hace loop para que llegue a STATE_ENDED
+        if (playerLooping && !livePhoto && nekoAutoScrollApplies(currentMessageObject)) {
+            videoPlayer.setLooping(false);
+        }
 
         if (currentMessageObject != null && currentMessageObject.forceSeekTo >= 0) {
             seekToProgressPending = currentMessageObject.forceSeekTo;
@@ -11052,6 +11061,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
     }
 
     private void releasePlayer(boolean onClose) {
+        nekoHideAutoScroll(); // NekoMod:
         usedSurfaceView = false;
         releasePipSession();
         if (videoPlayer != null) {
@@ -18265,6 +18275,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
     }
 
     public void closePhoto(boolean animated, boolean fromEditMode) {
+        nekoHideAutoScroll(); // NekoMod:
         if (stickerMakerView != null) {
             stickerMakerView.isThanosInProgress = false;
             if (cutOutBtn.isCancelState()) {
@@ -19524,6 +19535,82 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
             moveToY = maxY;
         }
         animateTo(scale, moveToX, moveToY, zoom);
+    }
+
+    // NekoMod: ---- auto-scroll de videos ----
+    private boolean nekoIsAutoScrollItem(MessageObject messageObject) {
+        return messageObject != null && (messageObject.isVideo() || NekoModConfig.autoScrollGifs && messageObject.isGif());
+    }
+
+    private boolean nekoAutoScrollApplies(MessageObject messageObject) {
+        return NekoModConfig.videoAutoScroll && !imagesArr.isEmpty() && imagesArrLocals.isEmpty() && pageBlocksAdapter == null && nekoIsAutoScrollItem(messageObject);
+    }
+
+    private void nekoHideAutoScroll() {
+        if (nekoAutoScrollOverlay != null) {
+            nekoAutoScrollOverlay.stop();
+            if (nekoAutoScrollOverlay.getParent() instanceof ViewGroup) {
+                ((ViewGroup) nekoAutoScrollOverlay.getParent()).removeView(nekoAutoScrollOverlay);
+            }
+            nekoAutoScrollOverlay = null;
+        }
+    }
+
+    /** Indice del siguiente video (o GIF) con el mismo orden que el swipe a la izquierda (+1), o -1. */
+    private int nekoFindNextVideoIndex() {
+        for (int i = currentIndex + 1; i < imagesArr.size(); i++) {
+            if (nekoIsAutoScrollItem(imagesArr.get(i))) {
+                return i;
+            }
+        }
+        if (NekoModConfig.autoScrollLoop) {
+            for (int i = 0; i <= currentIndex && i < imagesArr.size(); i++) {
+                if (nekoIsAutoScrollItem(imagesArr.get(i))) {
+                    return i;
+                }
+            }
+        }
+        return -1;
+    }
+
+    private void nekoGoToIndex(int target) {
+        nekoHideAutoScroll();
+        if (target < 0 || target >= imagesArr.size()) {
+            return;
+        }
+        if (target == currentIndex) {
+            // unico video y loop activo: reproducir de nuevo
+            seekVideoOrWebToProgress(0);
+            playVideoOrWeb();
+            return;
+        }
+        switchToNextIndex(target - currentIndex, false);
+    }
+
+    private void nekoOnVideoEnded() {
+        if (!nekoAutoScrollApplies(currentMessageObject) || !isVisible || videoPlayer == null) {
+            return;
+        }
+        final int target = nekoFindNextVideoIndex();
+        if (target < 0) {
+            return;
+        }
+        final int fromIndex = currentIndex;
+        if (NekoModConfig.autoScrollDelay <= 0) {
+            nekoGoToIndex(target);
+            return;
+        }
+        nekoHideAutoScroll();
+        nekoAutoScrollOverlay = new AutoScrollOverlay(parentActivity);
+        final AutoScrollOverlay overlay = nekoAutoScrollOverlay;
+        overlay.start(NekoModConfig.autoScrollDelay, () -> {
+            if (nekoAutoScrollOverlay == overlay && currentIndex == fromIndex) {
+                nekoGoToIndex(target);
+            } else {
+                nekoHideAutoScroll();
+            }
+        }, this::nekoHideAutoScroll);
+        containerView.addView(overlay, LayoutHelper.createFrame(260, 196, Gravity.CENTER));
     }
 
     private void goToNext() {

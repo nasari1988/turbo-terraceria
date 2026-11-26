@@ -45,6 +45,7 @@ public class NekoSettingsActivity extends BaseNekoSettingsActivity {
 
     private final List<ConfigHelper.News> newsList = new ArrayList<>();
 
+    private final int nekoModRow = rowId++;
     private final int generalRow = rowId++;
     private final int appearanceRow = rowId++;
     private final int chatRow = rowId++;
@@ -147,6 +148,9 @@ public class NekoSettingsActivity extends BaseNekoSettingsActivity {
 
         items.add(UItem.asCustomShadow(topView, 200 - 12));
 
+        items.add(UItem.asButtonSubtext(nekoModRow, R.drawable.msg_fave, LocaleController.getString(R.string.NekoModSettings), LocaleController.getString(R.string.NekoModSettingsAbout)).slug("nekoMod"));
+        items.add(UItem.asShadow(null));
+
         items.add(UItem.asButton(generalRow, R.drawable.msg_media, LocaleController.getString(R.string.General)).slug("general"));
         items.add(UItem.asButton(appearanceRow, R.drawable.msg_theme, LocaleController.getString(R.string.ChangeChannelNameColor2)).slug("appearance"));
         items.add(UItem.asButton(chatRow, R.drawable.msg_discussion, LocaleController.getString(R.string.Chat)).slug("chat"));
@@ -186,7 +190,9 @@ public class NekoSettingsActivity extends BaseNekoSettingsActivity {
             return;
         }
         var id = item.id;
-        if (id == chatRow) {
+        if (id == nekoModRow) {
+            presentFragment(new NekoModSettingsActivity());
+        } else if (id == chatRow) {
             presentFragment(new NekoChatSettingsActivity());
         } else if (id == generalRow) {
             presentFragment(new NekoGeneralSettingsActivity());

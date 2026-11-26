@@ -264,7 +264,9 @@ public class AndroidUtilities {
 
     public static Typeface bold() {
         if (mediumTypeface == null) {
-            if (SharedConfig.useSystemBoldFont && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            if (tw.nekomimi.nekogram.NekoModConfig.fontFamily != tw.nekomimi.nekogram.NekoModConfig.FONT_DEFAULT) { // NekoMod: fuente propia
+                mediumTypeface = getTypeface(TYPEFACE_ROBOTO_MEDIUM);
+            } else if (SharedConfig.useSystemBoldFont && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 mediumTypeface = Typeface.create(null, 500, false);
             } else {
                 mediumTypeface = getTypeface(TYPEFACE_ROBOTO_MEDIUM);
@@ -2500,11 +2502,55 @@ public class AndroidUtilities {
         return result;
     }
 
+    // NekoMod: devuelve null si se debe usar el comportamiento original
+    private static Typeface nekoModTypeface(String assetPath) {
+        int family = tw.nekomimi.nekogram.NekoModConfig.fontFamily;
+        if (family == tw.nekomimi.nekogram.NekoModConfig.FONT_DEFAULT) {
+            return null;
+        }
+        boolean italic = assetPath.contains("italic");
+        boolean heavy = assetPath.contains("rextrabold") || assetPath.contains("rbold") || assetPath.contains("rcondensedbold");
+        boolean medium = assetPath.contains("rmedium");
+        if (!italic && !heavy && !medium && !assetPath.equals("fonts/rregular.ttf")) {
+            return null; // mono, merriweather, etc.
+        }
+        if (family == tw.nekomimi.nekogram.NekoModConfig.FONT_SYSTEM) {
+            if (medium || heavy) {
+                return italic ? Typeface.create(Typeface.DEFAULT, Typeface.BOLD_ITALIC) : Typeface.DEFAULT_BOLD;
+            }
+            return italic ? Typeface.create(Typeface.DEFAULT, Typeface.ITALIC) : Typeface.DEFAULT;
+        }
+        if (family == tw.nekomimi.nekogram.NekoModConfig.FONT_INTER) {
+            String file;
+            if (heavy) {
+                file = "fonts/inter_bold.ttf";
+            } else if (italic) {
+                file = "fonts/inter_italic.ttf";
+            } else if (medium) {
+                file = "fonts/inter_medium.ttf";
+            } else {
+                file = "fonts/inter_regular.ttf";
+            }
+            try {
+                return Typeface.createFromAsset(ApplicationLoader.applicationContext.getAssets(), file);
+            } catch (Exception e) {
+                FileLog.e(e);
+            }
+        }
+        return null;
+    }
+
     public static Typeface getTypeface(String assetPath) {
         synchronized (typefaceCache) {
             if (!typefaceCache.containsKey(assetPath)) {
                 try {
                     Typeface t;
+                    // NekoMod: fuente propia (Inter / sistema)
+                    t = nekoModTypeface(assetPath);
+                    if (t != null) {
+                        typefaceCache.put(assetPath, t);
+                        return t;
+                    }
                     switch (assetPath) {
                         case TYPEFACE_ROBOTO_MEDIUM:
                             if (TypefaceHelper.isMediumWeightSupported()) {

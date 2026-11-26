@@ -750,7 +750,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
         Theme.createDialogsResources(context);
         drawMonoforumAvatar = false;
         drawCommunityAvatar = false;
-        avatarImage.setRoundRadius(dp(26));
+        avatarImage.setRoundRadius(tw.nekomimi.nekogram.NekoModConfig.squareAvatars ? dp(12) : dp(26)); // NekoMod
         for (int i = 0; i < thumbImage.length; ++i) {
             thumbImage[i] = new ImageReceiver(this);
             thumbImage[i].ignoreNotifications = true;
@@ -1076,8 +1076,13 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
         return height;
     }
 
+    // NekoMod: lista de chats compacta (solo modo de dos lineas por defecto, sin etiquetas/foros)
+    private boolean nekoModCompact() {
+        return tw.nekomimi.nekogram.NekoModConfig.compactChatList && !(useForceThreeLines || SharedConfig.useThreeLinesLayout) && !isForumCell() && !hasTags();
+    }
+
     private int getCollapsedHeight() {
-        int height = dp(useForceThreeLines || SharedConfig.useThreeLinesLayout ? heightThreeLines : heightDefault);
+        int height = dp(useForceThreeLines || SharedConfig.useThreeLinesLayout ? heightThreeLines : (nekoModCompact() ? heightDefault - 6 : heightDefault)); // NekoMod
         if (useSeparator || true) {
             height += 1;
         }
@@ -2507,7 +2512,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                 thumbImage[i].setImageCoords(thumbLeft + (thumbSize + 2) * i, avatarTop + dp(31) + (twoLinesForName ? dp(20) : 0) - (!(useForceThreeLines || SharedConfig.useThreeLinesLayout) && tags != null && !tags.isEmpty() ? dp(9) : 0), dp(18), dp(18));
             }
         } else {
-            avatarTop = dp(9);
+            avatarTop = dp(nekoModCompact() ? 6 : 9); // NekoMod
             messageNameTop = dp(31);
             timeTop = dp(16);
             errorTop = dp(38);
@@ -3327,7 +3332,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
             }
             drawMonoforumAvatar = false;
             drawCommunityAvatar = false;
-            avatarImage.setRoundRadius(dp(26));
+            avatarImage.setRoundRadius(tw.nekomimi.nekogram.NekoModConfig.squareAvatars ? dp(12) : dp(26)); // NekoMod
             drawUnmute = false;
         } else {
             int oldUnreadCount = unreadCount;
@@ -3779,7 +3784,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
             } else if (chat != null && chat.forum && currentDialogFolderId == 0 && !useFromUserAsAvatar || !isSavedDialog && user != null && user.self && MessagesController.getInstance(currentAccount).savedViewAsChats) {
                 avatarRadius = dp(16);
             } else {
-                avatarRadius = dp(28);
+                avatarRadius = tw.nekomimi.nekogram.NekoModConfig.squareAvatars ? dp(12) : dp(28); // NekoMod
             }
 
             avatarImage.setRoundRadius(avatarRadius);

@@ -1928,6 +1928,12 @@ public class ActionBarLayout extends FrameLayout implements INavigationLayout, F
         containerViewBack.setVisibility(View.INVISIBLE);
     }
 
+    // NekoMod: escala de duracion de las animaciones de transicion (nunca 0 para evitar divisiones por cero)
+    private static float nekoModAnimScale() {
+        float scale = tw.nekomimi.nekogram.NekoModConfig.getAnimationScale();
+        return scale <= 0f ? 1f : scale;
+    }
+
     private void startLayoutAnimation(final boolean open, final boolean first, final boolean preview) {
         if (first) {
             animationProgress = 0.0f;
@@ -1951,7 +1957,7 @@ public class ActionBarLayout extends FrameLayout implements INavigationLayout, F
                     dt = 18;
                 }
                 lastFrameTime = newTime;
-                float duration = preview && open ? 190.0f : 150.0f;
+                float duration = (preview && open ? 190.0f : 150.0f) * nekoModAnimScale(); // NekoMod
                 animationProgress += dt / duration;
                 if (animationProgress > 1.0f) {
                     animationProgress = 1.0f;
@@ -2118,7 +2124,7 @@ public class ActionBarLayout extends FrameLayout implements INavigationLayout, F
         if (parentActivity.getCurrentFocus() != null && fragment.hideKeyboardOnShow() && !preview) {
             AndroidUtilities.hideKeyboard(parentActivity.getCurrentFocus());
         }
-        boolean needAnimation = preview || !forceWithoutAnimation && MessagesController.getGlobalMainSettings().getBoolean("view_animations", true);
+        boolean needAnimation = preview || !forceWithoutAnimation && tw.nekomimi.nekogram.NekoModConfig.animationSpeed != tw.nekomimi.nekogram.NekoModConfig.ANIM_OFF && MessagesController.getGlobalMainSettings().getBoolean("view_animations", true); // NekoMod
 
         final BaseFragment currentFragment = !fragmentsStack.isEmpty() ? fragmentsStack.get(fragmentsStack.size() - 1) : null;
 
@@ -2291,7 +2297,7 @@ public class ActionBarLayout extends FrameLayout implements INavigationLayout, F
                 currentAnimation = new AnimatorSet();
                 currentAnimation.playTogether(animators);
                 currentAnimation.setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT);
-                currentAnimation.setDuration(200);
+                currentAnimation.setDuration((long) (200 * nekoModAnimScale())); // NekoMod
                 currentAnimation.addListener(new AnimatorListenerAdapter() {
                     @Override
                     public void onAnimationEnd(Animator animation) {
@@ -2690,7 +2696,7 @@ public class ActionBarLayout extends FrameLayout implements INavigationLayout, F
             AndroidUtilities.hideKeyboard(parentActivity.getCurrentFocus());
         }
         setInnerTranslationX(0);
-        boolean needAnimation = !forceNoAnimation && (inPreviewMode || transitionAnimationPreviewMode || animated && MessagesController.getGlobalMainSettings().getBoolean("view_animations", true));
+        boolean needAnimation = !forceNoAnimation && (inPreviewMode || transitionAnimationPreviewMode || animated && tw.nekomimi.nekogram.NekoModConfig.animationSpeed != tw.nekomimi.nekogram.NekoModConfig.ANIM_OFF && MessagesController.getGlobalMainSettings().getBoolean("view_animations", true)); // NekoMod
         final BaseFragment currentFragment = fragmentsStack.get(fragmentsStack.size() - 1);
         BaseFragment previousFragment = null;
         if (fragmentsStack.size() > 1) {
@@ -2846,7 +2852,7 @@ public class ActionBarLayout extends FrameLayout implements INavigationLayout, F
                 currentAnimation = new AnimatorSet();
                 currentAnimation.playTogether(animators);
                 currentAnimation.setInterpolator(accelerateDecelerateInterpolator);
-                currentAnimation.setDuration(200);
+                currentAnimation.setDuration((long) (200 * nekoModAnimScale())); // NekoMod
                 currentAnimation.addListener(new AnimatorListenerAdapter() {
                     @Override
                     public void onAnimationStart(Animator animation) {

@@ -343,6 +343,18 @@ public class MessageDrawable extends Drawable {
         return paint;
     }
 
+    // NekoMod: radio efectivo (dp) según el estilo de burbuja
+    private static int nekoModBubbleRadius() {
+        switch (tw.nekomimi.nekogram.NekoModConfig.bubbleStyle) {
+            case tw.nekomimi.nekogram.NekoModConfig.BUBBLE_SQUARE:
+                return 4;
+            case tw.nekomimi.nekogram.NekoModConfig.BUBBLE_IOS:
+                return 18;
+            default:
+                return SharedConfig.bubbleRadius;
+        }
+    }
+
     public Drawable[] getShadowDrawables() {
         return shadowDrawable;
     }
@@ -354,7 +366,7 @@ public class MessageDrawable extends Drawable {
         } else if (overrideRounding > 0) {
             newRad = 0;
         } else {
-            newRad = dp(SharedConfig.bubbleRadius);
+            newRad = dp(nekoModBubbleRadius());
         }
         int idx;
         if (isTopNear && isBottomNear) {
@@ -478,7 +490,7 @@ public class MessageDrawable extends Drawable {
         if (gradientShader == null && !isSelected && crossfadeFromDrawable == null) {
             return null;
         }
-        int newRad = dp(SharedConfig.bubbleRadius);
+        int newRad = dp(nekoModBubbleRadius());
         int idx;
         if (isTopNear && isBottomNear) {
             idx = 3;
@@ -604,14 +616,14 @@ public class MessageDrawable extends Drawable {
             rad = overrideRoundRadius;
             nearRad = overrideRoundRadius;
         } else if (overrideRounding > 0) {
-            rad = AndroidUtilities.lerp(dp(SharedConfig.bubbleRadius), Math.min(bounds.width(), bounds.height()) / 2, overrideRounding);
-            nearRad = AndroidUtilities.lerp(dp(Math.min(6, SharedConfig.bubbleRadius)), Math.min(bounds.width(), bounds.height()) / 2, overrideRounding);
+            rad = AndroidUtilities.lerp(dp(nekoModBubbleRadius()), Math.min(bounds.width(), bounds.height()) / 2, overrideRounding);
+            nearRad = AndroidUtilities.lerp(dp(Math.min(6, nekoModBubbleRadius())), Math.min(bounds.width(), bounds.height()) / 2, overrideRounding);
         } else if (currentType == TYPE_PREVIEW) {
             rad = dp(6);
             nearRad = dp(6);
         } else {
-            rad = dp(SharedConfig.bubbleRadius);
-            nearRad = dp(Math.min(6, SharedConfig.bubbleRadius));
+            rad = dp(nekoModBubbleRadius());
+            nearRad = dp(Math.min(6, nekoModBubbleRadius()));
         }
         int smallRad = dp(6);
 
@@ -667,14 +679,14 @@ public class MessageDrawable extends Drawable {
             rad = overrideRoundRadius;
             nearRad = overrideRoundRadius;
         } else if (overrideRounding > 0) {
-            rad = AndroidUtilities.lerp(dp(SharedConfig.bubbleRadius), Math.min(bounds.width(), bounds.height()) / 2, overrideRounding);
-            nearRad = AndroidUtilities.lerp(dp(Math.min(6, SharedConfig.bubbleRadius)), Math.min(bounds.width(), bounds.height()) / 2, overrideRounding);
+            rad = AndroidUtilities.lerp(dp(nekoModBubbleRadius()), Math.min(bounds.width(), bounds.height()) / 2, overrideRounding);
+            nearRad = AndroidUtilities.lerp(dp(Math.min(6, nekoModBubbleRadius())), Math.min(bounds.width(), bounds.height()) / 2, overrideRounding);
         } else if (currentType == TYPE_PREVIEW) {
             rad = dp(6);
             nearRad = dp(6);
         } else {
-            rad = dp(SharedConfig.bubbleRadius);
-            nearRad = dp(Math.min(6, SharedConfig.bubbleRadius));
+            rad = dp(nekoModBubbleRadius());
+            nearRad = dp(Math.min(6, nekoModBubbleRadius()));
         }
         int smallRad = dp(6);
         int top = Math.max(bounds.top, 0);
