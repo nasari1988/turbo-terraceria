@@ -19,6 +19,7 @@ public class NekoModSettingsActivity extends BaseNekoSettingsActivity {
 
     private static final int[] DELAYS = {0, 1, 2, 3, 5, 10};
 
+    private final int selfTestRow = rowId++; // NekoMod: autodiagnóstico
     private final int videoAutoScrollRow = rowId++;
     private final int autoScrollDelayRow = rowId++;
     private final int autoScrollGifsRow = rowId++;
@@ -75,6 +76,8 @@ public class NekoModSettingsActivity extends BaseNekoSettingsActivity {
 
     @Override
     protected void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {
+        items.add(UItem.asButton(selfTestRow, R.drawable.msg_info, "Ejecutar diagnóstico").slug("selfTest"));
+        items.add(UItem.asShadow(null));
         items.add(UItem.asHeader(LocaleController.getString(R.string.NekoModVideos)));
         items.add(UItem.asCheck(videoAutoScrollRow, LocaleController.getString(R.string.NekoModVideoAutoScroll)).slug("videoAutoScroll").setChecked(NekoModConfig.videoAutoScroll));
         items.add(TextSettingsCellFactory.of(autoScrollDelayRow, LocaleController.getString(R.string.NekoModAutoScrollDelay), delayLabel(NekoModConfig.autoScrollDelay)).slug("autoScrollDelay"));
@@ -124,7 +127,18 @@ public class NekoModSettingsActivity extends BaseNekoSettingsActivity {
     @Override
     protected void onItemClick(UItem item, View view, int position, float x, float y) {
         var id = item.id;
-        if (id == videoAutoScrollRow) {
+        if (id == selfTestRow) {
+            final String report = tw.nekomimi.nekogram.nekomod.NekoModSelfTest.run(getParentActivity());
+            showDialog(new org.telegram.ui.ActionBar.AlertDialog.Builder(getParentActivity())
+                    .setTitle("Diagnóstico")
+                    .setMessage(report)
+                    .setPositiveButton("Copiar reporte", (dialog, which) -> {
+                        org.telegram.messenger.AndroidUtilities.addToClipboard(report);
+                        BulletinFactory.of(this).createCopyBulletin("Reporte copiado").show();
+                    })
+                    .setNegativeButton("Cerrar", null)
+                    .create());
+        } else if (id == videoAutoScrollRow) {
             NekoModConfig.setBoolean("videoAutoScroll", !NekoModConfig.videoAutoScroll);
             if (view instanceof TextCheckCell) {
                 ((TextCheckCell) view).setChecked(NekoModConfig.videoAutoScroll);
